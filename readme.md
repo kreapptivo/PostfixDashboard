@@ -1687,4 +1687,4 @@ Special thanks to our sponsors:
 
 **Made with ❤️ by the Postfix Dashboard Team**
 
-*Last Updated: January 2025*
+*Last Updated: November 2025*
