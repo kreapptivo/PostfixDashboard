@@ -478,58 +478,232 @@ postfix-dashboard/
 
 ## 🚢 Deployment
 
-### Docker Deployment (Recommended)
+### Production Deployment Files
 
-#### 1. Create Dockerfile
+Below are all the configuration files you need for production deployment. Create these files in your project.
+
+---
+
+### 📁 Docker Deployment (Recommended)
+
+#### 1. Backend Dockerfile
 
 Create `backend/Dockerfile`:
 
 ```dockerfile
 FROM node:18-alpine
 
+# Set working directory
 WORKDIR /app
 
+# Copy package files
 COPY package*.json ./
+
+# Install production dependencies only
 RUN npm ci --only=production
 
+# Copy application files
 COPY server.js ./
+COPY .env.production ./.env
 
+# Create non-root user
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S nodejs -u 1001
+
+# Change ownership
+RUN chown -R nodejs:nodejs /app
+
+# Switch to non-root user
+USER nodejs
+
+# Expose port
 EXPOSE 3001
 
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD node -e "require('http').get('http://localhost:3001/api/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
+
+# Start application
 CMD ["node", "server.js"]
 ```
+
+#### 2. Frontend Dockerfile
 
 Create `frontend/Dockerfile`:
 
 ```dockerfile
+# Build stage
 FROM node:18-alpine as build
 
 WORKDIR /app
 
+# Copy package files
 COPY package*.json ./
+
+# Install dependencies
 RUN npm ci
 
+# Copy all files
 COPY . .
+
+# Build application
 RUN npm run build
 
+# Production stage
 FROM nginx:alpine
+
+# Install curl for health checks
+RUN apk add --no-cache curl
+
+# Copy built files
 COPY --from=build /app/dist /usr/share/nginx/html
+
+# Copy nginx configuration
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
+# Create nginx user
+RUN addgroup -g 1001 -S nginx && \
+    adduser -S nginx -u 1001 -G nginx || true
+
+# Expose port
 EXPOSE 80
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD curl -f http://localhost/api/health || exit 1
+
+# Start nginx
 CMD ["nginx", "-g", "daemon off;"]
 ```
 
-#### 2. Create docker-compose.yml
+#### 3. Frontend Nginx Configuration
+
+Create `frontend/nginx.conf`:
+
+```nginx
+server {
+    listen 80;
+    listen [::]:80;
+    server_name _;
+
+    root /usr/share/nginx/html;
+    index index.html;
+
+    # Security headers
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-XSS-Protection "1; mode=block" always;
+    add_header Referrer-Policy "no-referrer-when-downgrade" always;
+
+    # Gzip compression
+    gzip on;
+    gzip_vary on;
+    gzip_min_length 1024;
+    gzip_types text/plain text/css text/xml text/javascript 
+               application/x-javascript application/xml+rss 
+               application/json application/javascript;
+
+    # Frontend routes
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    # API proxy to backend
+    location /api/ {
+        proxy_pass http://backend:3001;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+        proxy_read_timeout 60s;
+        proxy_connect_timeout 60s;
+    }
+
+    # Cache static assets
+    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+
+    # Deny access to hidden files
+    location ~ /\. {
+        deny all;
+    }
+}
+```
+
+#### 4. Docker Compose - Development
+
+Create `docker-compose.yml`:
 
 ```yaml
 version: '3.8'
 
 services:
   backend:
-    build: ./backend
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: postfix-dashboard-backend
     ports:
       - "3001:3001"
+    volumes:
+      - /var/log/mail.log:/var/log/mail.log:ro
+      - /etc/postfix/main.cf:/etc/postfix/main.cf:rw
+      - ./backend/.env:/app/.env:ro
+    environment:
+      - NODE_ENV=production
+    networks:
+      - postfix-network
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: postfix-dashboard-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - postfix-network
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  postfix-network:
+    driver: bridge
+```
+
+#### 5. Docker Compose - Production with SSL
+
+Create `docker-compose.prod.yml`:
+
+```yaml
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: postfix-dashboard-backend
+    expose:
+      - "3001"
     volumes:
       - /var/log/mail.log:/var/log/mail.log:ro
       - /etc/postfix/main.cf:/etc/postfix/main.cf:rw
@@ -540,21 +714,257 @@ services:
       - POSTFIX_CONFIG_PATH=/etc/postfix/main.cf
       - DASHBOARD_USER=${DASHBOARD_USER}
       - DASHBOARD_PASSWORD=${DASHBOARD_PASSWORD}
+      - TOKEN_EXPIRY_HOURS=24
+      - AI_PROVIDER=${AI_PROVIDER:-ollama}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - OLLAMA_API_BASE_URL=${OLLAMA_API_BASE_URL:-http://localhost:11434}
+    networks:
+      - postfix-network
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3001/api/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
   frontend:
-    build: ./frontend
-    ports:
-      - "80:80"
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: postfix-dashboard-frontend
+    expose:
+      - "80"
     depends_on:
       - backend
+    networks:
+      - postfix-network
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  nginx-proxy:
+    image: nginx:alpine
+    container_name: nginx-proxy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+    depends_on:
+      - frontend
+    networks:
+      - postfix-network
+    restart: unless-stopped
+
+networks:
+  postfix-network:
+    driver: bridge
+
+volumes:
+  mail-logs:
+  postfix-config:
 ```
 
-#### 3. Deploy
+#### 6. Production Nginx Reverse Proxy Configuration
+
+Create `nginx/nginx.conf`:
+
+```nginx
+user nginx;
+worker_processes auto;
+error_log /var/log/nginx/error.log warn;
+pid /var/run/nginx.pid;
+
+events {
+    worker_connections 1024;
+    use epoll;
+}
+
+http {
+    include /etc/nginx/mime.types;
+    default_type application/octet-stream;
+
+    log_format main '$remote_addr - $remote_user [$time_local] "$request" '
+                    '$status $body_bytes_sent "$http_referer" '
+                    '"$http_user_agent" "$http_x_forwarded_for"';
+
+    access_log /var/log/nginx/access.log main;
+
+    sendfile on;
+    tcp_nopush on;
+    tcp_nodelay on;
+    keepalive_timeout 65;
+    types_hash_max_size 2048;
+    client_max_body_size 20M;
+
+    # Gzip compression
+    gzip on;
+    gzip_vary on;
+    gzip_proxied any;
+    gzip_comp_level 6;
+    gzip_types text/plain text/css text/xml text/javascript 
+               application/json application/javascript application/xml+rss;
+
+    # Rate limiting
+    limit_req_zone $binary_remote_addr zone=login_limit:10m rate=5r/m;
+    limit_req_zone $binary_remote_addr zone=api_limit:10m rate=30r/m;
+
+    # SSL configuration
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers 'ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384';
+    ssl_prefer_server_ciphers off;
+    ssl_session_cache shared:SSL:10m;
+    ssl_session_timeout 10m;
+
+    # HTTP redirect to HTTPS
+    server {
+        listen 80;
+        listen [::]:80;
+        server_name your-domain.com;
+
+        location /.well-known/acme-challenge/ {
+            root /var/www/certbot;
+        }
+
+        location / {
+            return 301 https://$server_name$request_uri;
+        }
+    }
+
+    # HTTPS server
+    server {
+        listen 443 ssl http2;
+        listen [::]:443 ssl http2;
+        server_name your-domain.com;
+
+        # SSL certificates
+        ssl_certificate /etc/letsencrypt/live/your-domain.com/fullchain.pem;
+        ssl_certificate_key /etc/letsencrypt/live/your-domain.com/privkey.pem;
+        ssl_trusted_certificate /etc/letsencrypt/live/your-domain.com/chain.pem;
+
+        # Security headers
+        add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+        add_header X-Frame-Options "SAMEORIGIN" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-XSS-Protection "1; mode=block" always;
+        add_header Referrer-Policy "no-referrer-when-downgrade" always;
+        add_header Content-Security-Policy "default-src 'self' http: https: data: blob: 'unsafe-inline'" always;
+
+        # Frontend
+        location / {
+            proxy_pass http://frontend:80;
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection 'upgrade';
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_cache_bypass $http_upgrade;
+        }
+
+        # Backend API with rate limiting
+        location /api/login {
+            limit_req zone=login_limit burst=3 nodelay;
+            proxy_pass http://backend:3001;
+            proxy_http_version 1.1;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_read_timeout 60s;
+            proxy_connect_timeout 60s;
+        }
+
+        location /api/ {
+            limit_req zone=api_limit burst=10 nodelay;
+            proxy_pass http://backend:3001;
+            proxy_http_version 1.1;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_read_timeout 60s;
+            proxy_connect_timeout 60s;
+        }
+    }
+}
+```
+
+#### 7. Environment File Template for Production
+
+Create `backend/.env.production`:
 
 ```bash
+# ============================================
+# PRODUCTION ENVIRONMENT CONFIGURATION
+# ============================================
+
+# Server Configuration
+NODE_ENV=production
+PORT=3001
+LOG_LEVEL=info
+ENABLE_REQUEST_LOGGING=false
+
+# Postfix Configuration
+POSTFIX_LOG_PATH=/var/log/mail.log
+POSTFIX_CONFIG_PATH=/etc/postfix/main.cf
+
+# Authentication (CHANGE THESE!)
+DASHBOARD_USER=admin@yourdomain.com
+DASHBOARD_PASSWORD=CHANGE_THIS_STRONG_PASSWORD_HERE
+TOKEN_SECRET=GENERATE_RANDOM_32_CHAR_SECRET_HERE
+TOKEN_EXPIRY_HOURS=24
+
+# AI Configuration
+AI_PROVIDER=ollama
+GEMINI_API_KEY=your_gemini_api_key_if_using_gemini
+GEMINI_MODEL=gemini-2.0-flash-exp
+OLLAMA_API_BASE_URL=http://localhost:11434
+OLLAMA_MODEL=llama3.2:latest
+
+# AI Analysis Settings
+AI_ANALYSIS_MAX_LOGS=200
+AI_ANALYSIS_DEFAULT_LOGS=50
+AI_ANALYSIS_TIMEOUT=60000
+```
+
+Create `.env` file for Docker Compose:
+
+```bash
+# Docker Compose Environment Variables
+DASHBOARD_USER=admin@yourdomain.com
+DASHBOARD_PASSWORD=YourSecurePassword123!
+AI_PROVIDER=ollama
+GEMINI_API_KEY=your_gemini_api_key_here
+OLLAMA_API_BASE_URL=http://localhost:11434
+```
+
+#### 8. Deploy with Docker
+
+```bash
+# Build and start services
+docker-compose -f docker-compose.prod.yml up -d
+
+# View logs
+docker-compose logs -f
+
+# Stop services
+docker-compose down
+
+# Rebuild after changes
+docker-compose build --no-cache
 docker-compose up -d
 ```
 
@@ -1687,4 +2097,4 @@ Special thanks to our sponsors:
 
 **Made with ❤️ by the Postfix Dashboard Team**
 
-*Last Updated: November 2025*
+*Last Updated: January 2025*
