@@ -1620,7 +1620,7 @@ For enterprise support, custom development, or consulting:
 
 ## 📜 Change Log
 
-### [2.2.0] - 2025-01-XX
+### [2.2.0] - 2025-11-01
 #### Added
 - Advanced analytics with multiple chart types
 - Improved IP address tracking
@@ -1638,13 +1638,13 @@ For enterprise support, custom development, or consulting:
 - Token expiration handling
 - Chart rendering issues
 
-### [2.1.0] - 2024-XX-XX
+### [2.1.0] - 2025-10-31
 #### Added
 - AI-powered log analysis
 - Allowed networks management
 - CSV export functionality
 
-### [2.0.0] - 2024-XX-XX
+### [2.0.0] - 2025-10-24
 #### Changed
 - Complete rewrite in TypeScript
 - New modern UI with Tailwind CSS
