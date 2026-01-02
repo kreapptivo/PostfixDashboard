@@ -70,6 +70,23 @@ class ApiService {
   }
 
   private async handleResponse<T>(response: Response, endpoint?: string): Promise<T> {
+    // Handle rate limiting (429) - comes from middleware, not backend
+    if (response.status === 429) {
+      const retryAfter = response.headers.get('retry-after');
+      const retryAfterSeconds = retryAfter ? parseInt(retryAfter, 10) : 60;
+      throw new ApiError(429, 'Too many requests. Please try again later.', { retryAfter: retryAfterSeconds });
+    }
+
+    // Parse response data
+    let data: any;
+    const contentType = response.headers.get('content-type');
+    if (contentType && contentType.includes('application/json')) {
+      data = await response.json();
+    } else {
+      data = await response.text();
+    }
+
+    // Handle unauthorized (401)
     if (response.status === 401) {
       // Only treat as session expired if it's not a login attempt
       if (endpoint !== '/api/login') {
@@ -80,17 +97,9 @@ class ApiService {
       // For login endpoint, let the error fall through to be handled normally
     }
 
-    let data: any;
-    const contentType = response.headers.get('content-type');
-    if (contentType && contentType.includes('application/json')) {
-      data = await response.json();
-    } else {
-      data = await response.text();
-    }
-
     if (!response.ok) {
       const message = data?.error || data?.message || `Request failed with status ${response.status}`;
-      throw new ApiError(response.status, message, data);
+      throw new ApiError(response.status, message);
     }
 
     return data as T;
