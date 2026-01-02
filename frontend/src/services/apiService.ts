@@ -22,13 +22,11 @@ class ApiError extends Error {
 }
 
 class ApiService {
-  private baseUrl = config.api.baseUrl;
   private timeout = config.api.timeout;
 
   private buildUrl(endpoint: string, params?: Record<string, any>): string {
-    // If baseUrl is empty, use relative URLs (for Vite proxy)
-    const base = this.baseUrl || '';
-    const url = base ? `${base}${endpoint}` : endpoint;
+    // Always use /api path - works for both development (Vite proxy) and production (reverse proxy)
+    const url = endpoint.startsWith('/api') ? endpoint : `/api${endpoint}`;
     
     if (!params) {
       return url;
