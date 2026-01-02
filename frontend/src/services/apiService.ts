@@ -69,11 +69,15 @@ class ApiService {
     }
   }
 
-  private async handleResponse<T>(response: Response): Promise<T> {
+  private async handleResponse<T>(response: Response, endpoint?: string): Promise<T> {
     if (response.status === 401) {
-      authService.clearAuth();
-      window.location.href = '/';
-      throw new ApiError(401, 'Session expired. Please login again.');
+      // Only treat as session expired if it's not a login attempt
+      if (endpoint !== '/api/login') {
+        authService.clearAuth();
+        window.location.href = '/';
+        throw new ApiError(401, 'Session expired. Please login again.');
+      }
+      // For login endpoint, let the error fall through to be handled normally
     }
 
     let data: any;
@@ -103,7 +107,7 @@ class ApiService {
       },
     });
 
-    return this.handleResponse<T>(response);
+    return this.handleResponse<T>(response, endpoint);
   }
 
   async post<T>(
@@ -123,7 +127,7 @@ class ApiService {
       ...options,
     });
 
-    return this.handleResponse<T>(response);
+    return this.handleResponse<T>(response, endpoint);
   }
 
   async put<T>(
@@ -143,7 +147,7 @@ class ApiService {
       ...options,
     });
 
-    return this.handleResponse<T>(response);
+    return this.handleResponse<T>(response, endpoint);
   }
 
   async delete<T>(endpoint: string, options?: RequestOptions): Promise<T> {
@@ -158,7 +162,7 @@ class ApiService {
       ...options,
     });
 
-    return this.handleResponse<T>(response);
+    return this.handleResponse<T>(response, endpoint);
   }
 }
 
