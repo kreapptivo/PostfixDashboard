@@ -15,12 +15,17 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Define allowed origins based on environment (local IP or Nginx Proxy URL)
-const allowedOrigins = [
-  'http://192.168.5.2',  // Your local frontend IP
-  'http://localhost',    // For local development
-  'https://productionurl.example.in',  // Nginx URL (change this to your production URL)
+// Define allowed origins (can be overridden via ALLOWED_ORIGINS env, comma-separated)
+const defaultAllowedOrigins = [
+  'http://localhost',
 ];
+
+const envAllowedOrigins = (process.env.ALLOWED_ORIGINS || '')
+  .split(',')
+  .map(origin => origin.trim())
+  .filter(Boolean);
+
+const allowedOrigins = envAllowedOrigins.length ? envAllowedOrigins : defaultAllowedOrigins;
 
 // Configure CORS to allow specific origins
 const corsOptions = {
@@ -61,7 +66,7 @@ const config = {
   ai: {
     provider: process.env.AI_PROVIDER || 'ollama',
     gemini: {
-      apiKey: process.env.GEMINI_API_KEY || process.env.API_KEY,
+      apiKey: process.env.GEMINI_API_KEY || '',
       model: process.env.GEMINI_MODEL || 'gemini-2.0-flash-exp',
     },
     ollama: {

@@ -3,7 +3,7 @@
 // ============================================
 // Path: postfix-dashboard/frontend/src/components/Login.tsx
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { MailIcon } from './icons/IconComponents';
 import { ApiError } from '../services/apiService';
@@ -14,6 +14,24 @@ const Login: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [retryAfter, setRetryAfter] = useState<number>(0);
+
+  // Countdown timer for retry-after
+  useEffect(() => {
+    if (retryAfter > 0) {
+      const timer = setInterval(() => {
+        setRetryAfter(prev => {
+          const newValue = Math.max(0, prev - 1);
+          // Clear error message when countdown reaches 0
+          if (newValue === 0 && error.includes('Too many requests')) {
+            setError('');
+          }
+          return newValue;
+        });
+      }, 1000);
+      return () => clearInterval(timer);
+    }
+  }, [retryAfter, error]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -29,12 +47,17 @@ const Login: React.FC = () => {
     } catch (err) {
       if (err instanceof ApiError) {
         setError(err.message);
+        // Handle rate limiting
+        if (err.status === 429 && err.data?.retryAfter) {
+          setRetryAfter(err.data.retryAfter);
+        }
       } else if (err instanceof Error) {
         setError(err.message);
+        console.error('Login error:', err);
       } else {
         setError('Could not connect to the server. Please check the connection.');
-      }
-      console.error('Login error:', err);
+        console.error('Connection error:', err);
+      }      
     }
   };
 
@@ -95,7 +118,7 @@ const Login: React.FC = () => {
           <div>
             <button
               type="submit"
-              disabled={isLoading}
+              disabled={isLoading || retryAfter > 0}
               className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-primary hover:bg-primary-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-hover focus:ring-offset-gray-900 disabled:bg-gray-600 disabled:cursor-not-allowed transition-colors"
             >
               {isLoading ? (
@@ -106,6 +129,8 @@ const Login: React.FC = () => {
                   </svg>
                   Signing in...
                 </>
+              ) : retryAfter > 0 ? (
+                `Wait ${retryAfter}s`
               ) : (
                 'Sign in'
               )}

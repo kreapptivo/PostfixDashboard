@@ -22,13 +22,11 @@ class ApiError extends Error {
 }
 
 class ApiService {
-  private baseUrl = config.api.baseUrl;
   private timeout = config.api.timeout;
 
   private buildUrl(endpoint: string, params?: Record<string, any>): string {
-    // If baseUrl is empty, use relative URLs (for Vite proxy)
-    const base = this.baseUrl || '';
-    const url = base ? `${base}${endpoint}` : endpoint;
+    // Always use /api path - works for both development (Vite proxy) and production (reverse proxy)
+    const url = endpoint.startsWith('/api') ? endpoint : `/api${endpoint}`;
     
     if (!params) {
       return url;
@@ -71,13 +69,15 @@ class ApiService {
     }
   }
 
-  private async handleResponse<T>(response: Response): Promise<T> {
-    if (response.status === 401) {
-      authService.clearAuth();
-      window.location.href = '/';
-      throw new ApiError(401, 'Session expired. Please login again.');
+  private async handleResponse<T>(response: Response, endpoint?: string): Promise<T> {
+    // Handle rate limiting (429) - comes from middleware, not backend
+    if (response.status === 429) {
+      const retryAfter = response.headers.get('retry-after');
+      const retryAfterSeconds = retryAfter ? parseInt(retryAfter, 10) : 60;
+      throw new ApiError(429, 'Too many requests. Please try again later.', { retryAfter: retryAfterSeconds });
     }
 
+    // Parse response data
     let data: any;
     const contentType = response.headers.get('content-type');
     if (contentType && contentType.includes('application/json')) {
@@ -86,9 +86,20 @@ class ApiService {
       data = await response.text();
     }
 
+    // Handle unauthorized (401)
+    if (response.status === 401) {
+      // Only treat as session expired if it's not a login attempt
+      if (endpoint !== '/api/login') {
+        authService.clearAuth();
+        window.location.href = '/';
+        throw new ApiError(401, 'Session expired. Please login again.');
+      }
+      // For login endpoint, let the error fall through to be handled normally
+    }
+
     if (!response.ok) {
       const message = data?.error || data?.message || `Request failed with status ${response.status}`;
-      throw new ApiError(response.status, message, data);
+      throw new ApiError(response.status, message);
     }
 
     return data as T;
@@ -105,7 +116,7 @@ class ApiService {
       },
     });
 
-    return this.handleResponse<T>(response);
+    return this.handleResponse<T>(response, endpoint);
   }
 
   async post<T>(
@@ -125,7 +136,7 @@ class ApiService {
       ...options,
     });
 
-    return this.handleResponse<T>(response);
+    return this.handleResponse<T>(response, endpoint);
   }
 
   async put<T>(
@@ -145,7 +156,7 @@ class ApiService {
       ...options,
     });
 
-    return this.handleResponse<T>(response);
+    return this.handleResponse<T>(response, endpoint);
   }
 
   async delete<T>(endpoint: string, options?: RequestOptions): Promise<T> {
@@ -160,7 +171,7 @@ class ApiService {
       ...options,
     });
 
-    return this.handleResponse<T>(response);
+    return this.handleResponse<T>(response, endpoint);
   }
 }
 
