@@ -1,10 +1,16 @@
 {
   "name": "postfix-dashboard-hooks",
   "private": true,
-  "version": "0.0.0",
+  "version": "2.3.0",
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
   "scripts": {
     "prepare": "simple-git-hooks",
-    "pre-commit": "npm --prefix backend run -s format:staged && npm --prefix frontend run -s format:staged"
+    "pre-commit": "npm --prefix backend run -s format:staged && npm --prefix frontend run -s format:staged",
+    "sync-versions": "node scripts/sync-versions.js",
+    "version": "npm run sync-versions"
   },
   "devDependencies": {
     "simple-git-hooks": "^2.13.1"

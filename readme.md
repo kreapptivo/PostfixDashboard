@@ -751,6 +751,21 @@ curl http://localhost:3001/api/stats \
   -H "Authorization: Bearer YOUR_TOKEN"
 ```
 
+Health response shape:
+
+```json
+{
+  "status": "ok",
+  "timestamp": "2026-01-03T12:00:00.000Z",
+  "uptime": 1234.56,
+  "version": "2.3.0",
+  "ai": {
+    "gemini": true,
+    "ollama": "http://localhost:11434"
+  }
+}
+```
+
 #### Frontend Testing
 
 1. Open browser developer tools (F12)

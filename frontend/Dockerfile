@@ -3,20 +3,17 @@ FROM node:20-alpine as build
 
 WORKDIR /app
 
-# Copy package files
-COPY package*.json ./
-COPY package-lock.json ./
+# Copy root package files (workspace root)
+COPY package.json package-lock.json ./
 
-# Install dependencies (includes dev deps for build)
-RUN npm ci \
- && chmod +x node_modules/.bin/tsc
+# Copy all frontend application files and directories
+COPY frontend/ ./frontend/
 
-# Copy all files
-COPY . .
+# Install dependencies (includes dev deps for build) using workspace (ignore lifecycle scripts as they're not needed in container)
+RUN npm ci --workspace=frontend --ignore-scripts
 
 # Build application without relying on executable bits
-RUN node node_modules/typescript/bin/tsc --pretty false \
- && node node_modules/vite/bin/vite.js build
+RUN npm run build --workspace=frontend
 
 # Production stage
 FROM nginx:alpine
@@ -25,10 +22,10 @@ FROM nginx:alpine
 RUN apk add --no-cache curl
 
 # Copy built files
-COPY --from=build /app/dist /usr/share/nginx/html
+COPY --from=build /app/frontend/dist /usr/share/nginx/html
 
 # Copy nginx configuration
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY frontend/nginx.conf /etc/nginx/conf.d/default.conf
 
 # Create nginx user
 RUN addgroup -g 1001 -S nginx && \
