@@ -6,9 +6,11 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview",
-    "lint": "eslint src --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
-    "type-check": "tsc --noEmit"
+    "preview": "vite preview",    
+    "lint": "eslint src --ext ts,tsx --report-unused-disable-directives --max-warnings 0",    
+    "type-check": "tsc --noEmit",    
+    "test": "vitest",
+    "test:ci": "vitest run --coverage"
   },
   "dependencies": {
     "react": "^18.2.0",
@@ -18,11 +20,16 @@
   "devDependencies": {
     "@types/react": "^18.2.66",
     "@types/react-dom": "^18.2.22",
-    "@vitejs/plugin-react": "^4.2.1",
-    "autoprefixer": "^10.4.16",
+    "@vitejs/plugin-react": "^4.2.1",    
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^16.0.1",
+    "autoprefixer": "^10.4.16",    
+    "jsdom": "^24.1.0",    
     "postcss": "^8.4.32",
     "tailwindcss": "^3.4.0",
     "typescript": "^5.2.2",
-    "vite": "^7.1.12"
+    "vite": "^7.1.12",
+    "vitest": "^2.1.4",
+    "@vitest/coverage-v8": "^2.1.4"
   }
 }

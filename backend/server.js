@@ -1139,10 +1139,14 @@ app.get('/api/health', (req, res) => {
     });
 });
 
-// Start server
-app.listen(PORT, () => {
-  logger.info(`Backend server is running on http://localhost:${PORT}`);
-  logger.info(`Token expiry: ${config.auth.tokenExpiryHours} hours`);
-  logger.info(`AI Provider: ${config.ai.provider}`);
-  logger.info(`Log Level: ${config.server.logLevel}`);
-});
+// Start server only when executed directly (not when required in tests)
+if (require.main === module) {
+  app.listen(PORT, () => {
+    logger.info(`Backend server is running on http://localhost:${PORT}`);
+    logger.info(`Token expiry: ${config.auth.tokenExpiryHours} hours`);
+    logger.info(`AI Provider: ${config.ai.provider}`);
+    logger.info(`Log Level: ${config.server.logLevel}`);
+  });
+}
+
+module.exports = app;
