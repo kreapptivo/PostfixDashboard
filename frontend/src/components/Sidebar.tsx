@@ -1,17 +1,28 @@
 import React from 'react';
-import { 
-  HomeIcon, 
-  DocumentTextIcon, 
-  SparklesIcon, 
-  GlobeAltIcon, 
+import {
+  HomeIcon,
+  DocumentTextIcon,
+  SparklesIcon,
+  GlobeAltIcon,
   MailIcon,
-  ChartBarIcon
+  ChartBarIcon,
 } from './icons/IconComponents';
 
 // Add new icon for collapse/expand
 const Bars3Icon = (props: React.SVGProps<SVGSVGElement>) => (
-  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" {...props}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    fill="none"
+    viewBox="0 0 24 24"
+    strokeWidth={1.5}
+    stroke="currentColor"
+    {...props}
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5"
+    />
   </svg>
 );
 
@@ -34,24 +45,34 @@ interface NavItemProps {
 
 const NavItem: React.FC<NavItemProps> = ({ icon, label, isActive, onClick, isCollapsed }) => {
   return (
-    <li
-      onClick={onClick}
-      className={`flex items-center p-3 my-1 rounded-md cursor-pointer transition-colors duration-200 ${
-        isActive ? 'bg-primary text-white' : 'text-gray-400 hover:bg-gray-700 hover:text-white'
-      }`}
-      title={isCollapsed ? label : undefined}
-    >
-      <span className="flex-shrink-0">{icon}</span>
-      {!isCollapsed && <span className="ml-3 font-medium whitespace-nowrap">{label}</span>}
+    <li className="my-1">
+      <button
+        type="button"
+        onClick={onClick}
+        className={`w-full flex items-center p-3 rounded-md transition-colors duration-200 ${
+          isActive ? 'bg-primary text-white' : 'text-gray-400 hover:bg-gray-700 hover:text-white'
+        }`}
+        title={isCollapsed ? label : undefined}
+      >
+        <span className="flex-shrink-0">{icon}</span>
+        {!isCollapsed && <span className="ml-3 font-medium whitespace-nowrap">{label}</span>}
+      </button>
     </li>
   );
 };
 
-const Sidebar: React.FC<SidebarProps> = ({ activeView, setActiveView, isCollapsed, setIsCollapsed }) => {
+const Sidebar: React.FC<SidebarProps> = ({
+  activeView,
+  setActiveView,
+  isCollapsed,
+  setIsCollapsed,
+}) => {
   return (
-    <aside className={`bg-gray-800 p-4 flex flex-col border-r border-gray-700 transition-all duration-300 ${
-      isCollapsed ? 'w-20' : 'w-64'
-    }`}>
+    <aside
+      className={`bg-gray-800 p-4 flex flex-col border-r border-gray-700 transition-all duration-300 ${
+        isCollapsed ? 'w-20' : 'w-64'
+      }`}
+    >
       <div className="flex items-center justify-between mb-8 px-2">
         {!isCollapsed && (
           <div className="flex items-center">
@@ -59,9 +80,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeView, setActiveView, isCollapse
             <h2 className="text-2xl font-bold text-gray-100 ml-2">Postfix</h2>
           </div>
         )}
-        {isCollapsed && (
-          <MailIcon className="w-8 h-8 text-primary mx-auto" />
-        )}
+        {isCollapsed && <MailIcon className="w-8 h-8 text-primary mx-auto" />}
         <button
           onClick={() => setIsCollapsed(!isCollapsed)}
           className={`p-2 rounded-md hover:bg-gray-700 text-gray-400 hover:text-white transition-colors ${
@@ -73,7 +92,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeView, setActiveView, isCollapse
           <Bars3Icon className="w-6 h-6" />
         </button>
       </div>
-      
+
       <nav className="flex-1">
         <ul>
           <NavItem
@@ -113,7 +132,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeView, setActiveView, isCollapse
           />
         </ul>
       </nav>
-      
+
       {!isCollapsed && (
         <div className="mt-auto text-center text-gray-500 text-xs">
           <p>Postfix Dashboard v2.2.0</p>

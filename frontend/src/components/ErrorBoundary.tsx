@@ -63,20 +63,18 @@ class ErrorBoundary extends Component<Props, State> {
                 <ExclamationTriangleIcon className="w-12 h-12 text-red-400" />
               </div>
             </div>
-            
+
             <h1 className="text-3xl font-bold text-center text-gray-100 mb-4">
               Oops! Something went wrong
             </h1>
-            
+
             <p className="text-gray-400 text-center mb-6">
-              We're sorry for the inconvenience. An unexpected error has occurred.
+              We&apos;re sorry for the inconvenience. An unexpected error has occurred.
             </p>
 
             {this.state.error && (
               <div className="bg-gray-900/50 rounded-md p-4 mb-6">
-                <p className="text-sm font-mono text-red-400 mb-2">
-                  {this.state.error.toString()}
-                </p>
+                <p className="text-sm font-mono text-red-400 mb-2">{this.state.error.toString()}</p>
                 {this.state.errorInfo && (
                   <details className="mt-4">
                     <summary className="text-sm text-gray-500 cursor-pointer hover:text-gray-400">

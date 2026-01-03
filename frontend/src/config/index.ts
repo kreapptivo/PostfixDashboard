@@ -6,9 +6,9 @@
 // Centralized configuration
 const config = {
   api: {
-    // In development, use empty string to use Vite's proxy
-    // In production, set VITE_API_BASE_URL to your backend URL
-    baseUrl: import.meta.env.VITE_API_BASE_URL || '',
+    // API calls always use /api path
+    // Development: Vite proxy redirects /api to http://backend:3001
+    // Production: Reverse proxy redirects /api to backend container
     timeout: parseInt(import.meta.env.VITE_API_TIMEOUT || '30000'),
   },
   auth: {

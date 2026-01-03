@@ -10,9 +10,20 @@ import {
   ShieldExclamationIcon,
   InformationCircleIcon,
   ChartBarIcon,
-  DocumentTextIcon
+  DocumentTextIcon,
 } from './icons/IconComponents';
 import apiService, { ApiError } from '../services/apiService';
+
+type Provider = 'ollama' | 'gemini';
+type AnalysisMode = 'recent' | 'manual';
+
+type LogSample = {
+  line?: string;
+  detail?: string;
+  description?: string;
+  text?: string;
+  message?: string;
+};
 
 // const AILogAnalysis: React.FC = () => {
 //   const [analysisResult, setAnalysisResult] = useState<AILogAnalysisResult | null>(null);
@@ -28,17 +39,26 @@ const AILogAnalysis: React.FC = () => {
   const [analysisResult, setAnalysisResult] = useState<AILogAnalysisResult | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
+
   // Get AI settings from environment or use defaults
-  const defaultProvider = import.meta.env.VITE_AI_PROVIDER || 'ollama';
-  const defaultOllamaUrl = import.meta.env.VITE_OLLAMA_API_BASE_URL || 'http://localhost:11434';
-  const defaultLogLimit = parseInt(import.meta.env.VITE_AI_ANALYSIS_DEFAULT_LOGS || '50');
-  
-  const [provider, setProvider] = useState<'ollama' | 'gemini'>(defaultProvider as 'ollama' | 'gemini');
+  const envProvider = import.meta.env.VITE_AI_PROVIDER;
+  const defaultProvider: Provider = envProvider === 'gemini' ? 'gemini' : 'ollama';
+  const defaultOllamaUrl =
+    typeof import.meta.env.VITE_OLLAMA_API_BASE_URL === 'string'
+      ? import.meta.env.VITE_OLLAMA_API_BASE_URL
+      : 'http://localhost:11434';
+  const defaultLogLimit = Number.parseInt(
+    typeof import.meta.env.VITE_AI_ANALYSIS_DEFAULT_LOGS === 'string'
+      ? import.meta.env.VITE_AI_ANALYSIS_DEFAULT_LOGS
+      : '50',
+    10,
+  );
+
+  const [provider, setProvider] = useState<Provider>(defaultProvider);
   const [ollamaUrl, setOllamaUrl] = useState(defaultOllamaUrl);
   const [manualInput, setManualInput] = useState('');
-  const [analysisMode, setAnalysisMode] = useState<'recent' | 'manual'>('recent');
-  const [logLimit, setLogLimit] = useState(defaultLogLimit);
+  const [analysisMode, setAnalysisMode] = useState<AnalysisMode>('recent');
+  const [logLimit, setLogLimit] = useState(Number.isFinite(defaultLogLimit) ? defaultLogLimit : 50);
 
   const handleAnalyze = useCallback(async () => {
     setIsLoading(true);
@@ -49,15 +69,18 @@ const AILogAnalysis: React.FC = () => {
 
     try {
       if (analysisMode === 'recent') {
-        const logSampleData = await apiService.get<any[]>('/api/logs', { limit: logLimit });
+        const logSampleData = await apiService.get<LogSample[]>('/api/logs', { limit: logLimit });
 
         if (!logSampleData || logSampleData.length === 0) {
-          throw new Error("No recent logs found to analyze.");
+          throw new Error('No recent logs found to analyze.');
         }
-        logsToAnalyze = logSampleData.map((log: any) => log.line || log.detail).join('\n');
+        logsToAnalyze = logSampleData
+          .map((log) => log.line ?? log.detail ?? '')
+          .filter((entry) => entry.length > 0)
+          .join('\n');
       } else {
         if (!manualInput.trim()) {
-          throw new Error("Manual input field is empty.");
+          throw new Error('Manual input field is empty.');
         }
         logsToAnalyze = manualInput;
       }
@@ -69,12 +92,20 @@ const AILogAnalysis: React.FC = () => {
       });
 
       // Helper function to convert items to strings
-      const normalizeArray = (arr?: any[]): string[] => {
+      const normalizeArray = (arr?: unknown[]): string[] => {
         if (!Array.isArray(arr)) return [];
-        return arr.map(item => {
+        return arr.map((item) => {
           if (typeof item === 'string') return item;
           if (typeof item === 'object' && item !== null) {
-            return item.description || item.text || item.message || JSON.stringify(item);
+            const candidate = item as {
+              description?: unknown;
+              text?: unknown;
+              message?: unknown;
+            };
+            if (typeof candidate.description === 'string') return candidate.description;
+            if (typeof candidate.text === 'string') return candidate.text;
+            if (typeof candidate.message === 'string') return candidate.message;
+            return JSON.stringify(candidate);
           }
           return String(item);
         });
@@ -114,7 +145,8 @@ const AILogAnalysis: React.FC = () => {
             AI-Powered Log Analysis
           </h2>
           <p className="text-gray-400 mt-1">
-            Get intelligent insights about anomalies, threats, errors, and recommendations from your mail logs.
+            Get intelligent insights about anomalies, threats, errors, and recommendations from your
+            mail logs.
           </p>
         </div>
       </div>
@@ -122,20 +154,22 @@ const AILogAnalysis: React.FC = () => {
       <div className="bg-gray-700/50 p-4 rounded-lg mb-6 space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
+            <label
+              htmlFor="provider-select"
+              className="block text-sm font-medium text-gray-300 mb-2"
+            >
               AI Provider
             </label>
             <select
+              id="provider-select"
               value={provider}
-              onChange={(e) => setProvider(e.target.value as any)}
+              onChange={(e) => setProvider(e.target.value === 'gemini' ? 'gemini' : 'ollama')}
               className="w-full bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-gray-200 focus:ring-primary focus:border-primary"
             >
               <option value="ollama">Ollama (Local)</option>
               <option value="gemini">Gemini API</option>
             </select>
-            <p className="text-xs text-gray-500 mt-1">
-              Gemini provides more detailed analysis
-            </p>
+            <p className="text-xs text-gray-500 mt-1">Gemini provides more detailed analysis</p>
           </div>
           {provider === 'ollama' && (
             <div>
@@ -154,14 +188,13 @@ const AILogAnalysis: React.FC = () => {
           )}
         </div>
 
-        <div>
-          <label className="block text-sm font-medium text-gray-300 mb-2">
-            Analysis Mode
-          </label>
+        <fieldset>
+          <legend className="block text-sm font-medium text-gray-300 mb-2">Analysis Mode</legend>
           <div className="flex gap-4 flex-wrap">
-            <label className="flex items-center">
+            <label className="flex items-center" htmlFor="analysis-mode-recent">
               <input
                 type="radio"
+                id="analysis-mode-recent"
                 name="analysisMode"
                 value="recent"
                 checked={analysisMode === 'recent'}
@@ -170,9 +203,10 @@ const AILogAnalysis: React.FC = () => {
               />
               <span className="ml-2 text-gray-300">Analyze Recent Logs</span>
             </label>
-            <label className="flex items-center">
+            <label className="flex items-center" htmlFor="analysis-mode-manual">
               <input
                 type="radio"
+                id="analysis-mode-manual"
                 name="analysisMode"
                 value="manual"
                 checked={analysisMode === 'manual'}
@@ -182,7 +216,7 @@ const AILogAnalysis: React.FC = () => {
               <span className="ml-2 text-gray-300">Analyze Manual Input</span>
             </label>
           </div>
-        </div>
+        </fieldset>
 
         {analysisMode === 'recent' && (
           <div>
@@ -228,9 +262,25 @@ const AILogAnalysis: React.FC = () => {
         >
           {isLoading ? (
             <>
-              <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              <svg
+                className="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+              >
+                <circle
+                  className="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  strokeWidth="4"
+                ></circle>
+                <path
+                  className="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                ></path>
               </svg>
               Analyzing... This may take 15-30 seconds
             </>
@@ -273,24 +323,33 @@ const AILogAnalysis: React.FC = () => {
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div className="bg-gray-800/50 p-4 rounded-md">
                   <p className="text-sm text-gray-400">Total Messages</p>
-                  <p className="text-2xl font-bold text-gray-100 mt-1">{analysisResult.statistics.totalMessages}</p>
+                  <p className="text-2xl font-bold text-gray-100 mt-1">
+                    {analysisResult.statistics.totalMessages}
+                  </p>
                 </div>
                 <div className="bg-gray-800/50 p-4 rounded-md">
                   <p className="text-sm text-gray-400">Success Rate</p>
-                  <p className="text-2xl font-bold text-green-400 mt-1">{analysisResult.statistics.successRate}</p>
+                  <p className="text-2xl font-bold text-green-400 mt-1">
+                    {analysisResult.statistics.successRate}
+                  </p>
                 </div>
                 <div className="bg-gray-800/50 p-4 rounded-md">
                   <p className="text-sm text-gray-400">Bounce Rate</p>
-                  <p className="text-2xl font-bold text-red-400 mt-1">{analysisResult.statistics.bounceRate}</p>
+                  <p className="text-2xl font-bold text-red-400 mt-1">
+                    {analysisResult.statistics.bounceRate}
+                  </p>
                 </div>
                 <div className="bg-gray-800/50 p-4 rounded-md">
                   <p className="text-sm text-gray-400">Deferred Rate</p>
-                  <p className="text-2xl font-bold text-yellow-400 mt-1">{analysisResult.statistics.deferredRate}</p>
+                  <p className="text-2xl font-bold text-yellow-400 mt-1">
+                    {analysisResult.statistics.deferredRate}
+                  </p>
                 </div>
               </div>
               {analysisResult.statistics.peakActivityTime && (
                 <div className="mt-4 text-sm text-gray-400">
-                  <span className="font-semibold">Peak Activity:</span> {analysisResult.statistics.peakActivityTime}
+                  <span className="font-semibold">Peak Activity:</span>{' '}
+                  {analysisResult.statistics.peakActivityTime}
                 </div>
               )}
             </div>
@@ -306,7 +365,10 @@ const AILogAnalysis: React.FC = () => {
               {analysisResult.anomalies && analysisResult.anomalies.length > 0 ? (
                 <ul className="space-y-2">
                   {analysisResult.anomalies.map((item, index) => (
-                    <li key={index} className="text-sm text-gray-300 pl-4 border-l-2 border-yellow-500/50">
+                    <li
+                      key={index}
+                      className="text-sm text-gray-300 pl-4 border-l-2 border-yellow-500/50"
+                    >
                       {item}
                     </li>
                   ))}
@@ -324,7 +386,10 @@ const AILogAnalysis: React.FC = () => {
               {analysisResult.threats && analysisResult.threats.length > 0 ? (
                 <ul className="space-y-2">
                   {analysisResult.threats.map((item, index) => (
-                    <li key={index} className="text-sm text-gray-300 pl-4 border-l-2 border-red-500/50">
+                    <li
+                      key={index}
+                      className="text-sm text-gray-300 pl-4 border-l-2 border-red-500/50"
+                    >
                       {item}
                     </li>
                   ))}
@@ -342,7 +407,10 @@ const AILogAnalysis: React.FC = () => {
               {analysisResult.errors && analysisResult.errors.length > 0 ? (
                 <ul className="space-y-2">
                   {analysisResult.errors.map((item, index) => (
-                    <li key={index} className="text-sm text-gray-300 pl-4 border-l-2 border-purple-500/50">
+                    <li
+                      key={index}
+                      className="text-sm text-gray-300 pl-4 border-l-2 border-purple-500/50"
+                    >
                       {item}
                     </li>
                   ))}
@@ -376,8 +444,12 @@ const AILogAnalysis: React.FC = () => {
       {!analysisResult && !isLoading && !error && (
         <div className="text-center py-12 text-gray-500">
           <SparklesIcon className="w-16 h-16 mx-auto mb-4 text-gray-600" />
-          <p className="text-lg">Configure your AI provider and click "Analyze Now" to get started.</p>
-          <p className="text-sm mt-2">The AI will provide detailed insights about your mail server logs.</p>
+          <p className="text-lg">
+            Configure your AI provider and click &quot;Analyze Now&quot; to get started.
+          </p>
+          <p className="text-sm mt-2">
+            The AI will provide detailed insights about your mail server logs.
+          </p>
         </div>
       )}
     </div>
