@@ -80,7 +80,7 @@ jobs:
           badges-directory: .github/badges
           coverage-badge-filename: backend-coverage.svg
           coverage-label: backend coverage
-          jacoco-csv-file: backend/coverage/lcov.info
+          lcov-file: backend/coverage/lcov.info
           generate-branches-badge: false
           generate-summary: false
       
@@ -166,7 +166,7 @@ jobs:
           badges-directory: .github/badges
           coverage-badge-filename: frontend-coverage.svg
           coverage-label: frontend coverage
-          jacoco-csv-file: frontend/coverage/lcov.info
+          lcov-file: frontend/coverage/lcov.info
           generate-branches-badge: false
           generate-summary: false
       

@@ -2,11 +2,12 @@
 
 A modern, real-time monitoring dashboard for Postfix mail servers with AI-powered log analysis, advanced analytics, and intuitive network management.
 
-[![Build & Test](https://img.shields.io/github/actions/workflow/status/kreapptivo/postfix-dashboard/ci.yml?branch=main&label=build%20%26%20test)](https://github.com/kreapptivo/postfix-dashboard/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/github/actions/workflow/status/kreapptivo/postfix-dashboard/ci.yml?branch=main&label=tests&logo=vitest)](https://github.com/kreapptivo/postfix-dashboard/actions/workflows/ci.yml)
-[![Docker Images](https://img.shields.io/github/actions/workflow/status/kreapptivo/postfix-dashboard/docker-image.yml?branch=main&label=docker%20(frontend%20%2b%20backend)&logo=docker)](https://github.com/kreapptivo/postfix-dashboard/actions/workflows/docker-image.yml)
+[![Build & Lint](https://img.shields.io/github/actions/workflow/status/kreapptivo/PostfixDashboard/ci.yml?branch=main&label=build%20%2B%20lint&logo=githubactions)](https://github.com/kreapptivo/PostfixDashboard/actions/workflows/ci.yml)
+[![Tests](https://img.shields.io/github/actions/workflow/status/kreapptivo/PostfixDashboard/ci.yml?branch=main&label=tests&logo=vitest)](https://github.com/kreapptivo/PostfixDashboard/actions/workflows/ci.yml)
+[![Docker Images](https://img.shields.io/github/actions/workflow/status/kreapptivo/PostfixDashboard/docker-image.yml?branch=main&label=docker%20(frontend%20%2b%20backend)&logo=docker)](https://github.com/kreapptivo/PostfixDashboard/actions/workflows/docker-image.yml)
 ![Backend Coverage](.github/badges/backend-coverage.svg)
 ![Frontend Coverage](.github/badges/frontend-coverage.svg)
+
 ![License](https://img.shields.io/badge/license-ISC-green.svg)
 ![Node](https://img.shields.io/badge/node-%3E%3D16.0.0-brightgreen.svg)
 ![React](https://img.shields.io/badge/react-18.2.0-61dafb.svg)
