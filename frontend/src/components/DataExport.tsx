@@ -27,7 +27,11 @@ const DataExport = <T extends object>({ data, filename }: DataExportProps<T>) =>
           if (typeof value === 'bigint') {
             return value.toString();
           }
-          if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+          if (
+            typeof value === 'string' ||
+            typeof value === 'number' ||
+            typeof value === 'boolean'
+          ) {
             return String(value).replace(/"/g, '""');
           }
           return JSON.stringify(value);

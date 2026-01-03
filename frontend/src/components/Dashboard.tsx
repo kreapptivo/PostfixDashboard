@@ -198,7 +198,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
           <p className="text-gray-200 font-semibold mb-2">{label}</p>
           {payload.map((entry, index) => {
             if (!entry) return null;
-            const displayValue = typeof entry.value === 'number' ? entry.value : Number(entry.value);
+            const displayValue =
+              typeof entry.value === 'number' ? entry.value : Number(entry.value);
             return (
               <p key={index} className="text-sm" style={{ color: entry.color }}>
                 {entry.name}: {Number.isFinite(displayValue) ? displayValue.toLocaleString() : ''}

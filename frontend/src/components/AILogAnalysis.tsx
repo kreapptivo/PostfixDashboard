@@ -154,7 +154,10 @@ const AILogAnalysis: React.FC = () => {
       <div className="bg-gray-700/50 p-4 rounded-lg mb-6 space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label htmlFor="provider-select" className="block text-sm font-medium text-gray-300 mb-2">
+            <label
+              htmlFor="provider-select"
+              className="block text-sm font-medium text-gray-300 mb-2"
+            >
               AI Provider
             </label>
             <select

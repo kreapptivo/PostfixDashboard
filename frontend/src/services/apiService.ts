@@ -109,7 +109,10 @@ class ApiService {
         }
       }
 
-      throw new ApiError(response.status, message ?? `Request failed with status ${response.status}`);
+      throw new ApiError(
+        response.status,
+        message ?? `Request failed with status ${response.status}`,
+      );
     }
 
     return data as T;
