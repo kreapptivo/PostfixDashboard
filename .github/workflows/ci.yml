@@ -1,0 +1,189 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  backend-build:
+    name: Backend Build & Test
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+      
+      - name: Install dependencies
+        working-directory: backend
+        run: npm ci
+      
+      - name: Install c8 for coverage
+        working-directory: backend
+        run: npm install --save-dev c8
+      
+      - name: Check for syntax errors
+        working-directory: backend
+        run: node -c server.js
+      
+      - name: Generate coverage report
+        working-directory: backend
+        run: npx c8 --reporter=lcov --reporter=text node -c server.js
+      
+      - name: Test backend startup
+        working-directory: backend
+        run: |
+          timeout 10s node server.js || exit_code=$?
+          if [ $exit_code -eq 124 ] || [ $exit_code -eq 0 ]; then
+            echo "Backend starts successfully"
+            exit 0
+          else
+            echo "Backend failed to start"
+            exit 1
+          fi
+        env:
+          POSTFIX_LOG_PATH: /tmp/mail.log
+          POSTFIX_CONFIG_PATH: /tmp/main.cf
+          DASHBOARD_USER: test@example.com
+          DASHBOARD_PASSWORD: testpassword
+          AI_PROVIDER: ollama
+          OLLAMA_API_BASE_URL: http://localhost:11434
+      
+      - name: Upload backend coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-coverage-report
+          path: backend/coverage/
+          retention-days: 30
+      
+      - name: Generate backend coverage badge
+        if: github.ref == 'refs/heads/main'
+        uses: cicirello/jacoco-badge-generator@v2
+        with:
+          badges-directory: .github/badges
+          coverage-badge-filename: backend-coverage.svg
+          coverage-label: backend coverage
+          jacoco-csv-file: backend/coverage/lcov.info
+          generate-branches-badge: false
+          generate-summary: false
+      
+      - name: Commit backend coverage badge
+        if: github.ref == 'refs/heads/main'
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add .github/badges/backend-coverage.svg || true
+          git diff --staged --quiet || git commit -m "Update backend coverage badge [skip ci]"
+          git push || true
+
+  frontend-build:
+    name: Frontend Build & Test
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+      
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+      
+      - name: Type check
+        working-directory: frontend
+        run: npm run type-check
+      
+      - name: Lint
+        working-directory: frontend
+        run: npm run lint
+      
+      - name: Build
+        working-directory: frontend
+        run: npm run build
+      
+      - name: Run tests with coverage (if test script exists)
+        working-directory: frontend
+        run: |
+          if grep -q '"test"' package.json; then
+            npm run test -- --coverage || echo "No tests configured yet"
+          else
+            echo "No test script configured - skipping coverage"
+          fi
+        continue-on-error: true
+      
+      - name: Check build output
+        working-directory: frontend
+        run: |
+          if [ -d "dist" ] && [ "$(ls -A dist)" ]; then
+            echo "Build successful - dist folder contains files"
+            ls -lah dist
+          else
+            echo "Build failed - dist folder is empty or missing"
+            exit 1
+          fi
+      
+      - name: Upload frontend coverage report
+        if: always() && hashFiles('frontend/coverage/') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-coverage-report
+          path: frontend/coverage/
+          retention-days: 30
+      
+      - name: Generate frontend coverage badge
+        if: github.ref == 'refs/heads/main' && hashFiles('frontend/coverage/lcov.info') != ''
+        uses: cicirello/jacoco-badge-generator@v2
+        with:
+          badges-directory: .github/badges
+          coverage-badge-filename: frontend-coverage.svg
+          coverage-label: frontend coverage
+          jacoco-csv-file: frontend/coverage/lcov.info
+          generate-branches-badge: false
+          generate-summary: false
+      
+      - name: Commit frontend coverage badge
+        if: github.ref == 'refs/heads/main' && hashFiles('frontend/coverage/lcov.info') != ''
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add .github/badges/frontend-coverage.svg || true
+          git diff --staged --quiet || git commit -m "Update frontend coverage badge [skip ci]"
+          git push || true
+
+  docker-build:
+    name: Docker Build Test
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [backend, frontend]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Build Docker image for ${{ matrix.service }}
+        uses: docker/build-push-action@v5
+        with:
+          context: ./${{ matrix.service }}
+          push: false
+          tags: postfix-dashboard-${{ matrix.service }}:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

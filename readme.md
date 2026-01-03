@@ -2,10 +2,15 @@
 
 A modern, real-time monitoring dashboard for Postfix mail servers with AI-powered log analysis, advanced analytics, and intuitive network management.
 
-![Version](https://img.shields.io/badge/version-2.2.0-blue.svg)
+[![CI](https://github.com/kreapptivo/postfix-dashboard/actions/workflows/ci.yml/badge.svg)](https://github.com/kreapptivo/postfix-dashboard/actions/workflows/ci.yml)
+[![Docker Image](https://github.com/kreapptivo/postfix-dashboard/actions/workflows/docker-image.yml/badge.svg)](https://github.com/kreapptivo/postfix-dashboard/actions/workflows/docker-image.yml)
+![Backend Coverage](.github/badges/backend-coverage.svg)
+![Frontend Coverage](.github/badges/frontend-coverage.svg)
 ![License](https://img.shields.io/badge/license-ISC-green.svg)
 ![Node](https://img.shields.io/badge/node-%3E%3D16.0.0-brightgreen.svg)
 ![React](https://img.shields.io/badge/react-18.2.0-61dafb.svg)
+
+**Current Status**: ✅ Active Development | **Stability**: Production-ready | **Maintenance**: Actively maintained
 
 ## 📋 Table of Contents
 
@@ -1514,22 +1519,6 @@ A: You can deploy to Kubernetes. Create appropriate manifests for the deployment
 - Provide detailed information
 - Help others when you can
 - Follow the Code of Conduct
-
----
-
-## 🎯 Project Status
-
-**Current Status**: ✅ Active Development
-
-- **Stability**: Production-ready
-- **Maintenance**: Actively maintained
-- **Support**: Community support via GitHub Discussions and Issues
-- **Updates**: Regular updates and security patches
-
-### Build Status
-![Build](https://img.shields.io/badge/build-passing-brightgreen)
-![Tests](https://img.shields.io/badge/tests-passing-brightgreen)
-![Coverage](https://img.shields.io/badge/coverage-85%25-green)
 
 ---
 
