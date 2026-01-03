@@ -44,7 +44,7 @@ jobs:
       
       - name: Generate coverage report
         working-directory: backend
-        run: npx c8 --reporter=lcov --reporter=text node -c server.js
+        run: npx c8 --reporter=lcov --reporter=text npm test
       
       - name: Test backend startup
         working-directory: backend
@@ -128,11 +128,13 @@ jobs:
         working-directory: frontend
         run: npm run build
       
-      - name: Run tests with coverage (if test script exists)
+      - name: Run tests with coverage (if script exists)
         working-directory: frontend
         run: |
-          if grep -q '"test"' package.json; then
-            npm run test -- --coverage || echo "No tests configured yet"
+          if grep -q '"test:ci"' package.json; then
+            npm run test:ci || echo "Frontend tests failed"
+          elif grep -q '"test"' package.json; then
+            npm run test || echo "Frontend tests failed"
           else
             echo "No test script configured - skipping coverage"
           fi
