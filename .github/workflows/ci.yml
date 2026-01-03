@@ -172,13 +172,6 @@ jobs:
           path: .github/badges/
           retention-days: 7
 
-      - name: Comment coverage on PR
-        if: github.event_name == 'pull_request'
-        uses: daun/lcov-reporter-action@v0.6.0
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          lcov-file: coverage/backend/lcov.info,coverage/frontend/lcov.info
-
   docker-build:
     name: Docker Build Test
     runs-on: ubuntu-latest
