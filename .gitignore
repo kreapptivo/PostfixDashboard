@@ -1,0 +1,7 @@
+dist
+node_modules
+.env.production
+
+# Workspace: only root package-lock.json is used
+backend/package-lock.json
+frontend/package-lock.json

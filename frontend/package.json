@@ -8,7 +8,13 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "lint": "eslint src --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
-    "type-check": "tsc --noEmit"
+    "lint:fix": "npm run lint -- --fix",
+    "type-check": "tsc --noEmit",
+    "format": "prettier . --check",
+    "format:fix": "prettier . --write",
+    "format:staged": "pretty-quick --staged --pattern \"frontend/**/*.{js,ts,tsx,jsx,json,md,css,html}\"",
+    "test": "vitest",
+    "test:ci": "vitest run --coverage"
   },
   "dependencies": {
     "react": "^18.2.0",
@@ -16,13 +22,28 @@
     "recharts": "^2.12.7"
   },
   "devDependencies": {
+    "@eslint/js": "^9.14.0",
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^16.0.1",
     "@types/react": "^18.2.66",
     "@types/react-dom": "^18.2.22",
+    "@typescript-eslint/eslint-plugin": "^8.15.0",
+    "@typescript-eslint/parser": "^8.15.0",
     "@vitejs/plugin-react": "^4.2.1",
+    "@vitest/coverage-v8": "^2.1.4",
     "autoprefixer": "^10.4.16",
+    "eslint": "^9.14.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-jsx-a11y": "^6.8.0",
+    "eslint-plugin-react": "^7.37.2",
+    "eslint-plugin-react-hooks": "^5.0.0",
+    "jsdom": "^24.1.0",
     "postcss": "^8.4.32",
+    "prettier": "^3.7.4",
+    "pretty-quick": "^4.2.2",
     "tailwindcss": "^3.4.0",
     "typescript": "^5.2.2",
-    "vite": "^7.1.12"
+    "vite": "^7.1.12",
+    "vitest": "^2.1.4"
   }
 }

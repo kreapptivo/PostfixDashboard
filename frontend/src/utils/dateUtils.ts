@@ -57,7 +57,7 @@ export const getTodayRange = (): { startDate: string; endDate: string } => {
 export const getLastNDaysRange = (days: number): { startDate: string; endDate: string } => {
   const endDate = new Date();
   const startDate = getDateDaysAgo(days - 1); // -1 because we want to include today
-  
+
   return {
     startDate: formatDateToISO(startDate),
     endDate: formatDateToISO(endDate),
@@ -71,11 +71,11 @@ export const getThisWeekRange = (): { startDate: string; endDate: string } => {
   const today = new Date();
   const dayOfWeek = today.getDay();
   const daysFromMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1; // 0 = Sunday
-  
+
   const monday = new Date(today);
   monday.setDate(today.getDate() - daysFromMonday);
   monday.setHours(0, 0, 0, 0);
-  
+
   return {
     startDate: formatDateToISO(monday),
     endDate: formatDateToISO(today),
@@ -88,7 +88,7 @@ export const getThisWeekRange = (): { startDate: string; endDate: string } => {
 export const getThisMonthRange = (): { startDate: string; endDate: string } => {
   const today = new Date();
   const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-  
+
   return {
     startDate: formatDateToISO(firstDayOfMonth),
     endDate: formatDateToISO(today),
@@ -102,7 +102,7 @@ export const getLastMonthRange = (): { startDate: string; endDate: string } => {
   const today = new Date();
   const firstDayOfLastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
   const lastDayOfLastMonth = new Date(today.getFullYear(), today.getMonth(), 0);
-  
+
   return {
     startDate: formatDateToISO(firstDayOfLastMonth),
     endDate: formatDateToISO(lastDayOfLastMonth),
@@ -136,6 +136,6 @@ export const getRelativeTimeString = (date: Date): string => {
   if (diffMin < 60) return `${diffMin} minute${diffMin > 1 ? 's' : ''} ago`;
   if (diffHour < 24) return `${diffHour} hour${diffHour > 1 ? 's' : ''} ago`;
   if (diffDay < 7) return `${diffDay} day${diffDay > 1 ? 's' : ''} ago`;
-  
+
   return date.toLocaleDateString();
 };

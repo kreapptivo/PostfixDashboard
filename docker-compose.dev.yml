@@ -1,0 +1,46 @@
+name: postfix-dashboard-dev
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: ./backend/Dockerfile
+    container_name: postfix-dashboard-backend
+    ports:
+      - "3001:3001"
+    volumes:
+      - /var/log/mail.log:/var/log/mail.log:ro
+      - /etc/postfix/main.cf:/etc/postfix/main.cf:rw
+      - ./backend/.env.production:/app/.env:ro
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+    networks:
+      - postfix-network
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  frontend:
+    build:
+      context: .
+      dockerfile: ./frontend/Dockerfile
+    container_name: postfix-dashboard-frontend
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
+    networks:
+      - postfix-network
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  postfix-network:
+    driver: bridge

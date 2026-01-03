@@ -2,7 +2,6 @@
 // FILE 3: frontend/src/components/MailLogTable.tsx
 // ============================================
 
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { MailLog, MailStatus, LogFilter } from '../types';
 import DataExport from './DataExport';
@@ -23,21 +22,18 @@ interface MailLogTableProps {
   initialFilter?: LogFilter;
 }
 
-const MailLogTable: React.FC<MailLogTableProps> = ({ 
-  showFilters = true,
-  initialFilter = {}
-}) => {
+const MailLogTable: React.FC<MailLogTableProps> = ({ showFilters = true, initialFilter = {} }) => {
   const [logs, setLogs] = useState<MailLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedLog, setSelectedLog] = useState<MailLog | null>(null);
-  
+
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   //const [pageSize, setPageSize] = useState(config.pagination.defaultPageSize);
   const [pageSize, setPageSize] = useState<number>(50);
   const [totalItems, setTotalItems] = useState(0);
-  
+
   // Filter state
   const [filter, setFilter] = useState<LogFilter>({
     startDate: initialFilter.startDate || '',
@@ -45,76 +41,76 @@ const MailLogTable: React.FC<MailLogTableProps> = ({
     status: initialFilter.status || 'all',
   });
 
-  const fetchLogs = useCallback(async (page: number, size: number, currentFilter: LogFilter) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const params: any = {
-        page,
-        limit: size,
-      };
+  const fetchLogs = useCallback(
+    async (page: number, size: number, currentFilter: LogFilter) => {
+      setLoading(true);
+      setError(null);
+      try {
+        const params: Record<string, string | number> = {
+          limit: showFilters ? size : 10,
+        };
 
-      if (currentFilter.startDate) params.startDate = currentFilter.startDate;
-      if (currentFilter.endDate) params.endDate = currentFilter.endDate;
-      if (currentFilter.status && currentFilter.status !== 'all') {
-        params.status = currentFilter.status;
-      }
-      
-      // If not showing filters, just get recent logs
-      if (!showFilters) {
-        params.limit = 10;
-        delete params.page;
-      }
+        if (showFilters) {
+          params.page = page;
+        }
 
-      const data = await apiService.get<MailLog[]>('/api/logs', params);
-      
-      setLogs(data);
-      
-      // For now, estimate total items (backend needs to return this)
-      setTotalItems(data.length >= size ? size * 10 : (page - 1) * size + data.length);
-      
-    } catch (err) {
-      if (err instanceof ApiError) {
-        setError(err.message);
-      } else {
-        setError('Failed to retrieve logs. Please try again.');
+        if (currentFilter.startDate) params.startDate = currentFilter.startDate;
+        if (currentFilter.endDate) params.endDate = currentFilter.endDate;
+        if (currentFilter.status && currentFilter.status !== 'all') {
+          params.status = currentFilter.status;
+        }
+
+        const data = await apiService.get<MailLog[]>('/api/logs', params);
+
+        setLogs(data);
+
+        // For now, estimate total items (backend needs to return this)
+        setTotalItems(data.length >= size ? size * 10 : (page - 1) * size + data.length);
+      } catch (err) {
+        if (err instanceof ApiError) {
+          setError(err.message);
+        } else {
+          setError('Failed to retrieve logs. Please try again.');
+        }
+        console.error('Failed to fetch logs:', err);
+      } finally {
+        setLoading(false);
       }
-      console.error('Failed to fetch logs:', err);
-    } finally {
-      setLoading(false);
-    }
-  }, [showFilters]);
+    },
+    [showFilters],
+  );
 
   useEffect(() => {
-    fetchLogs(currentPage, pageSize, filter);
-  }, [currentPage, pageSize, fetchLogs]);
+    void fetchLogs(currentPage, pageSize, filter);
+  }, [currentPage, pageSize, filter, fetchLogs]);
 
   // Apply filter from initial props
   useEffect(() => {
     if (initialFilter.status || initialFilter.startDate || initialFilter.endDate) {
-      setFilter(prev => ({
+      setFilter((prev) => ({
         ...prev,
         ...initialFilter,
       }));
       setCurrentPage(1);
-      fetchLogs(1, pageSize, { ...filter, ...initialFilter });
+      const mergedFilter = { ...initialFilter } as LogFilter;
+      void fetchLogs(1, pageSize, mergedFilter);
     }
-  }, [initialFilter.status, initialFilter.startDate, initialFilter.endDate]);
+  }, [initialFilter, fetchLogs, pageSize]);
 
   const handleApplyFilter = () => {
     setCurrentPage(1);
-    fetchLogs(1, pageSize, filter);
+    void fetchLogs(1, pageSize, filter);
   };
 
   const handleClearFilters = () => {
-    const clearedFilter: LogFilter = { 
-      startDate: '', 
-      endDate: '', 
-      status: 'all' 
+    const clearedFilter: LogFilter = {
+      startDate: '',
+      endDate: '',
+      status: 'all',
     };
     setFilter(clearedFilter);
     setCurrentPage(1);
-    fetchLogs(1, pageSize, clearedFilter);
+    void fetchLogs(1, pageSize, clearedFilter);
   };
 
   const handlePageChange = (page: number) => {
@@ -141,12 +137,15 @@ const MailLogTable: React.FC<MailLogTableProps> = ({
       <div className="bg-gray-800 rounded-lg border border-gray-700">
         <div className="p-6">
           {showFilters && <h2 className="text-xl font-semibold mb-4">Mail Logs</h2>}
-          
+
           {showFilters && (
             <div className="flex flex-wrap items-center justify-between mb-4 gap-4">
               <div className="flex items-center gap-4 flex-wrap">
                 <div>
-                  <label htmlFor="log-start-date" className="text-sm font-medium text-gray-400 mr-2">
+                  <label
+                    htmlFor="log-start-date"
+                    className="text-sm font-medium text-gray-400 mr-2"
+                  >
                     From
                   </label>
                   <input
@@ -176,7 +175,9 @@ const MailLogTable: React.FC<MailLogTableProps> = ({
                   <select
                     id="log-status"
                     value={filter.status || 'all'}
-                    onChange={(e) => setFilter({ ...filter, status: e.target.value as any })}
+                    onChange={(e) =>
+                      setFilter({ ...filter, status: e.target.value as LogFilter['status'] })
+                    }
                     className="bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-gray-200 focus:ring-primary focus:border-primary"
                   >
                     <option value="all">All Status</option>
@@ -207,11 +208,21 @@ const MailLogTable: React.FC<MailLogTableProps> = ({
             <table className="w-full text-sm text-left text-gray-400">
               <thead className="text-xs text-gray-300 uppercase bg-gray-700">
                 <tr>
-                  <th scope="col" className="px-6 py-3">Timestamp</th>
-                  <th scope="col" className="px-6 py-3">From</th>
-                  <th scope="col" className="px-6 py-3">To</th>
-                  <th scope="col" className="px-6 py-3">Status</th>
-                  <th scope="col" className="px-6 py-3">Detail</th>
+                  <th scope="col" className="px-6 py-3">
+                    Timestamp
+                  </th>
+                  <th scope="col" className="px-6 py-3">
+                    From
+                  </th>
+                  <th scope="col" className="px-6 py-3">
+                    To
+                  </th>
+                  <th scope="col" className="px-6 py-3">
+                    Status
+                  </th>
+                  <th scope="col" className="px-6 py-3">
+                    Detail
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -219,9 +230,25 @@ const MailLogTable: React.FC<MailLogTableProps> = ({
                   <tr>
                     <td colSpan={5} className="text-center py-8 text-gray-400">
                       <div className="flex items-center justify-center">
-                        <svg className="animate-spin h-5 w-5 mr-3 text-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        <svg
+                          className="animate-spin h-5 w-5 mr-3 text-primary"
+                          xmlns="http://www.w3.org/2000/svg"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                        >
+                          <circle
+                            className="opacity-25"
+                            cx="12"
+                            cy="12"
+                            r="10"
+                            stroke="currentColor"
+                            strokeWidth="4"
+                          ></circle>
+                          <path
+                            className="opacity-75"
+                            fill="currentColor"
+                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                          ></path>
                         </svg>
                         Loading logs...
                       </div>
@@ -229,7 +256,9 @@ const MailLogTable: React.FC<MailLogTableProps> = ({
                   </tr>
                 ) : error ? (
                   <tr>
-                    <td colSpan={5} className="text-center py-8 text-red-400">{error}</td>
+                    <td colSpan={5} className="text-center py-8 text-red-400">
+                      {error}
+                    </td>
                   </tr>
                 ) : logs.length > 0 ? (
                   logs.map((log) => (
@@ -244,9 +273,11 @@ const MailLogTable: React.FC<MailLogTableProps> = ({
                       <td className="px-6 py-4">{log.from}</td>
                       <td className="px-6 py-4">{log.to}</td>
                       <td className="px-6 py-4">
-                        <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                          statusColors[log.status] || 'bg-gray-500/20 text-gray-400'
-                        }`}>
+                        <span
+                          className={`px-2 py-1 rounded-full text-xs font-semibold ${
+                            statusColors[log.status] || 'bg-gray-500/20 text-gray-400'
+                          }`}
+                        >
                           {log.status.charAt(0).toUpperCase() + log.status.slice(1)}
                         </span>
                       </td>
@@ -276,13 +307,17 @@ const MailLogTable: React.FC<MailLogTableProps> = ({
             onPageChange={handlePageChange}
             onPageSizeChange={handlePageSizeChange}
             //pageSizeOptions={config.pagination.pageSizeOptions}
-			pageSizeOptions={[...config.pagination.pageSizeOptions]}
+            pageSizeOptions={[...config.pagination.pageSizeOptions]}
           />
         )}
       </div>
 
       {selectedLog && (
-        <Modal isOpen={!!selectedLog} onClose={handleCloseModal} title={`Log Details: ${selectedLog.id}`}>
+        <Modal
+          isOpen={!!selectedLog}
+          onClose={handleCloseModal}
+          title={`Log Details: ${selectedLog.id}`}
+        >
           <div className="space-y-4">
             <div>
               <h3 className="font-semibold text-gray-400">Timestamp</h3>
@@ -299,9 +334,11 @@ const MailLogTable: React.FC<MailLogTableProps> = ({
             <div>
               <h3 className="font-semibold text-gray-400">Status</h3>
               <p>
-                <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                  statusColors[selectedLog.status] || 'bg-gray-500/20 text-gray-400'
-                }`}>
+                <span
+                  className={`px-2 py-1 rounded-full text-xs font-semibold ${
+                    statusColors[selectedLog.status] || 'bg-gray-500/20 text-gray-400'
+                  }`}
+                >
                   {selectedLog.status.charAt(0).toUpperCase() + selectedLog.status.slice(1)}
                 </span>
               </p>

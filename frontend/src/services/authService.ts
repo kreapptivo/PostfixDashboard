@@ -16,7 +16,7 @@ class AuthService {
   private expiryKey = config.auth.tokenExpiryKey;
 
   setToken(token: string): void {
-    const expiryTime = Date.now() + (config.auth.expiryHours * 60 * 60 * 1000);
+    const expiryTime = Date.now() + config.auth.expiryHours * 60 * 60 * 1000;
     localStorage.setItem(this.tokenKey, token);
     localStorage.setItem(this.expiryKey, expiryTime.toString());
   }
@@ -58,23 +58,23 @@ class AuthService {
       return {};
     }
     return {
-      'Authorization': `Bearer ${token}`,
+      Authorization: `Bearer ${token}`,
     };
   }
 
   isTokenExpiringSoon(): boolean {
     const expiry = localStorage.getItem(this.expiryKey);
     if (!expiry) return false;
-    
+
     const expiryTime = parseInt(expiry);
     const oneHour = 60 * 60 * 1000;
-    return (expiryTime - Date.now()) < oneHour;
+    return expiryTime - Date.now() < oneHour;
   }
 
   getTimeUntilExpiry(): number {
     const expiry = localStorage.getItem(this.expiryKey);
     if (!expiry) return 0;
-    
+
     const remaining = parseInt(expiry) - Date.now();
     return Math.max(0, remaining);
   }
