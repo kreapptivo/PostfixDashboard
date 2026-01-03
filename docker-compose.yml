@@ -1,20 +1,99 @@
 name: postfix-dashboard
 services:
-  backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: postfix-dashboard-backend
+  traefik:
+    image: traefik:v3.6
+    container_name: postfix-dashboard-traefik
+    command:
+      # Providers
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      # EntryPoints
+      - --entrypoints.web.address=:80
+      - --entrypoints.web.http.redirections.entrypoint.to=websecure
+      - --entrypoints.web.http.redirections.entrypoint.scheme=https
+      - --entrypoints.web.http.redirections.entrypoint.permanent=true
+      - --entrypoints.websecure.address=:443
+      - --entrypoints.websecure.http.tls=true
+      # Logging
+      # - --accesslog=true
+      # - --accesslog.addInternals=true
+      - --log.level=INFO
+      # Let's Encrypt
+      - --certificatesresolvers.le.acme.email=you@example.com #Please use your real E-Mail!
+      - --certificatesresolvers.le.acme.storage=/letsencrypt/acme.json
+      - --certificatesresolvers.le.acme.httpchallenge=true
+      - --certificatesresolvers.le.acme.httpchallenge.entrypoint=web
+      # API & Dashboard
+      - --api=false
+      # - --api=true
+      # - --api.dashboard=true
+      # - --api.basepath=/traefik/
+      # - --api.insecure=false
+    security_opt:
+      - no-new-privileges:true
+    labels:
+      - traefik.enable=false
+      # - traefik.enable=true
+      - traefik.http.routers.dashboard.rule=PathPrefix(`/traefik`)
+      - traefik.http.routers.dashboard.priority=100
+      - traefik.http.routers.dashboard.service=api@internal
+      - traefik.http.routers.dashboard.tls=true
+      - traefik.http.routers.dashboard.tls.certresolver=le
     ports:
-      - "3001:3001"
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./letsencrypt:/letsencrypt
+    networks:
+      - postfix-dashboard-network
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  backend:
+    image: ghcr.io/kreapptivo/postfix-dashboard-backend:latest
+    container_name: postfix-dashboard-backend
     volumes:
       - /var/log/mail.log:/var/log/mail.log:ro
-      - /etc/postfix/main.cf:/etc/postfix/main.cf:rw
+      - /etc/postfix/main.cf:/etc/postfix/main.cf:ro
       - ./backend/.env.production:/app/.env:ro
     environment:
       - NODE_ENV=production
+      - PORT=3001
+    labels:
+      - traefik.enable=true
+      # Rate limit middleware            
+      - traefik.http.middlewares.login-limit.ratelimit.average=3
+      - traefik.http.middlewares.login-limit.ratelimit.burst=5
+      - traefik.http.middlewares.login-limit.ratelimit.period=60s
+      - traefik.http.middlewares.api-limit.ratelimit.average=1
+      - traefik.http.middlewares.api-limit.ratelimit.burst=10
+      # Login route with strict rate limit
+      - traefik.http.routers.postfix-backend-login.rule=PathPrefix(`/api/login`)
+      - traefik.http.routers.postfix-backend-login.priority=30
+      - traefik.http.routers.postfix-backend-login.entrypoints=websecure
+      - traefik.http.routers.postfix-backend-login.tls=true
+      - traefik.http.routers.postfix-backend-login.tls.certresolver=le
+      - traefik.http.routers.postfix-backend-login.middlewares=login-limit
+      - traefik.http.routers.postfix-backend-login.service=postfix-backend-login
+      - traefik.http.services.postfix-backend-login.loadbalancer.server.port=3001
+      # General API route with standard rate limit
+      - traefik.http.routers.postfix-backend-api.rule=PathPrefix(`/api`)
+      - traefik.http.routers.postfix-backend-api.priority=20
+      - traefik.http.routers.postfix-backend-api.entrypoints=websecure
+      - traefik.http.routers.postfix-backend-api.tls=true
+      - traefik.http.routers.postfix-backend-api.tls.certresolver=le
+      - traefik.http.routers.postfix-backend-api.middlewares=api-limit
+      - traefik.http.routers.postfix-backend-api.service=postfix-backend-api
+      - traefik.http.services.postfix-backend-api.loadbalancer.server.port=3001
     networks:
-      - postfix-network
+      - postfix-dashboard-network
+    depends_on:
+      - traefik
     restart: unless-stopped
     logging:
       driver: "json-file"
@@ -23,16 +102,20 @@ services:
         max-file: "3"
 
   frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
+    image: ghcr.io/kreapptivo/postfix-dashboard-frontend:latest
     container_name: postfix-dashboard-frontend
-    ports:
-      - "80:80"
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.postfix-frontend.rule=PathPrefix(`/`)
+      - traefik.http.routers.postfix-frontend.priority=10
+      - traefik.http.routers.postfix-frontend.entrypoints=websecure
+      - traefik.http.routers.postfix-frontend.tls=true
+      - traefik.http.routers.postfix-frontend.tls.certresolver=le
+      - traefik.http.services.postfix-frontend.loadbalancer.server.port=80
+    networks:
+      - postfix-dashboard-network
     depends_on:
       - backend
-    networks:
-      - postfix-network
     restart: unless-stopped
     logging:
       driver: "json-file"
@@ -41,5 +124,5 @@ services:
         max-file: "3"
 
 networks:
-  postfix-network:
-    driver: bridge
+  postfix-dashboard-network:
+
