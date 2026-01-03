@@ -162,7 +162,7 @@ jobs:
         uses: ImBIOS/lcov-coverage-badge@v1            
         with:
           file: coverage/backend/lcov.info
-          access_token: ${{ secret.GITHUB_TOKEN }}
+          access_token: ${{ secrets.GITHUB_TOKEN }}
           style: flat
           icon_name: googlecloud
           icon_color: 'ffffff'
@@ -180,7 +180,7 @@ jobs:
         uses: ImBIOS/lcov-coverage-badge@v1            
         with:
           file: coverage/frontend/lcov.info
-          access_token: ${{ secret.GITHUB_TOKEN }}
+          access_token: ${{ secrets.GITHUB_TOKEN }}
           style: flat
           icon_name: googlecloud
           icon_color: 'ffffff'
