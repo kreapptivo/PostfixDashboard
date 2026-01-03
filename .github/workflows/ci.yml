@@ -23,6 +23,14 @@ jobs:
       - name: Install dependencies
         working-directory: backend
         run: npm ci
+
+      - name: Lint backend
+        working-directory: backend
+        run: npm run lint
+
+      - name: Check backend formatting
+        working-directory: backend
+        run: npm run format
       
       - name: Install c8 for coverage
         working-directory: backend
@@ -89,6 +97,10 @@ jobs:
       - name: Lint
         working-directory: frontend
         run: npm run lint
+
+      - name: Check formatting
+        working-directory: frontend
+        run: npm run format
       
       - name: Build
         working-directory: frontend
