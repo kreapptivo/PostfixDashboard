@@ -14,11 +14,7 @@ const AppContent: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-900 text-gray-200 font-sans">
-      {isAuthenticated ? (
-        <Dashboard onLogout={logout} />
-      ) : (
-        <Login />
-      )}
+      {isAuthenticated ? <Dashboard onLogout={logout} /> : <Login />}
     </div>
   );
 };

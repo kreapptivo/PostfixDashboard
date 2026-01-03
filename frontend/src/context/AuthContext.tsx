@@ -28,13 +28,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   });
   const [isTokenExpiringSoon, setIsTokenExpiringSoon] = useState<boolean>(false);
 
+  const logout = useCallback(() => {
+    authService.clearAuth();
+    setIsAuthenticated(false);
+    setTokenExpiry(null);
+    setIsTokenExpiringSoon(false);
+    window.location.href = '/';
+  }, []);
+
   useEffect(() => {
     if (!isAuthenticated) return;
 
     const checkExpiry = () => {
       setIsTokenExpiringSoon(authService.isTokenExpiringSoon());
       setTokenExpiry(authService.getTokenExpiry());
-      
+
       if (!authService.isAuthenticated()) {
         logout();
       }
@@ -44,7 +52,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const interval = setInterval(checkExpiry, 60000);
 
     return () => clearInterval(interval);
-  }, [isAuthenticated]);
+  }, [isAuthenticated, logout]);
 
   const login = useCallback(async (email: string, password: string) => {
     setIsLoading(true);
@@ -56,23 +64,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       const token = response.token || btoa(`${email}:${Date.now()}`);
       authService.setToken(token);
-      
+
       setIsAuthenticated(true);
       setTokenExpiry(authService.getTokenExpiry());
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Login failed:', error);
       throw error;
     } finally {
       setIsLoading(false);
     }
-  }, []);
-
-  const logout = useCallback(() => {
-    authService.clearAuth();
-    setIsAuthenticated(false);
-    setTokenExpiry(null);
-    setIsTokenExpiringSoon(false);
-    window.location.href = '/';
   }, []);
 
   const value: AuthContextType = {

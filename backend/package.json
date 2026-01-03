@@ -1,4 +1,3 @@
-
 {
   "name": "postfix-dashboard-backend",
   "version": "1.0.0",
@@ -7,7 +6,7 @@
   "scripts": {
     "start": "node server.js",
     "lint": "eslint . --ext .js --max-warnings 0",
-    "lint:fix": "npm run lint -- --fix",
+    "lint:fix": "eslint . --ext .js --max-warnings 0 --fix",
     "format": "prettier . --write",
     "format:check": "prettier . --check"
   },

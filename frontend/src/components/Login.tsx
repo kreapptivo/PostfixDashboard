@@ -20,7 +20,7 @@ const Login: React.FC = () => {
   useEffect(() => {
     if (retryAfter > 0) {
       const timer = setInterval(() => {
-        setRetryAfter(prev => {
+        setRetryAfter((prev) => {
           const newValue = Math.max(0, prev - 1);
           // Clear error message when countdown reaches 0
           if (newValue === 0 && error.includes('Too many requests')) {
@@ -47,9 +47,12 @@ const Login: React.FC = () => {
     } catch (err) {
       if (err instanceof ApiError) {
         setError(err.message);
-        // Handle rate limiting
-        if (err.status === 429 && err.data?.retryAfter) {
-          setRetryAfter(err.data.retryAfter);
+        const retryAfterSeconds =
+          typeof err.data === 'object' && err.data && 'retryAfter' in err.data
+            ? Number((err.data as Record<string, unknown>).retryAfter)
+            : undefined;
+        if (err.status === 429 && Number.isFinite(retryAfterSeconds)) {
+          setRetryAfter(Number(retryAfterSeconds));
         }
       } else if (err instanceof Error) {
         setError(err.message);
@@ -57,7 +60,7 @@ const Login: React.FC = () => {
       } else {
         setError('Could not connect to the server. Please check the connection.');
         console.error('Connection error:', err);
-      }      
+      }
     }
   };
 
@@ -66,7 +69,7 @@ const Login: React.FC = () => {
       <div className="w-full max-w-md p-8 space-y-8 bg-gray-800 rounded-lg shadow-lg border border-gray-700">
         <div className="text-center">
           <div className="flex justify-center items-center mb-4">
-            <MailIcon className="w-12 h-12 text-primary"/>
+            <MailIcon className="w-12 h-12 text-primary" />
           </div>
           <h1 className="text-3xl font-bold text-gray-100">{config.app.name}</h1>
           <p className="mt-2 text-gray-400">Please sign in to continue</p>
@@ -123,9 +126,25 @@ const Login: React.FC = () => {
             >
               {isLoading ? (
                 <>
-                  <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  <svg
+                    className="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                  >
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    ></circle>
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                    ></path>
                   </svg>
                   Signing in...
                 </>
@@ -137,9 +156,7 @@ const Login: React.FC = () => {
             </button>
           </div>
         </form>
-        <div className="text-center text-xs text-gray-500">
-          v{config.app.version}
-        </div>
+        <div className="text-center text-xs text-gray-500">v{config.app.version}</div>
       </div>
     </div>
   );

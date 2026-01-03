@@ -15,20 +15,20 @@ interface StatCardProps {
   isClickable?: boolean;
 }
 
-const StatCard: React.FC<StatCardProps> = ({ 
-  title, 
-  value, 
-  icon, 
-  change, 
+const StatCard: React.FC<StatCardProps> = ({
+  title,
+  value,
+  icon,
+  change,
   status,
   onClick,
-  isClickable = false 
+  isClickable = false,
 }) => {
   const statusClasses = {
     success: 'text-success',
     danger: 'text-danger',
     warning: 'text-warning',
-    default: 'text-gray-400'
+    default: 'text-gray-400',
   };
 
   const changeColor = status ? statusClasses[status] : statusClasses.default;
@@ -47,10 +47,10 @@ const StatCard: React.FC<StatCardProps> = ({
   };
 
   return (
-    <div 
+    <div
       className={`bg-gray-800 p-6 rounded-lg border border-gray-700 flex items-center justify-between transition-all ${
-        isClickable 
-          ? 'cursor-pointer hover:border-primary hover:shadow-lg hover:shadow-primary/20 hover:scale-105 active:scale-100' 
+        isClickable
+          ? 'cursor-pointer hover:border-primary hover:shadow-lg hover:shadow-primary/20 hover:scale-105 active:scale-100'
           : ''
       }`}
       onClick={handleClick}
@@ -66,9 +66,7 @@ const StatCard: React.FC<StatCardProps> = ({
           <span>{change}</span>
         </div>
       </div>
-      <div className="bg-gray-700/50 p-4 rounded-full">
-        {icon}
-      </div>
+      <div className="bg-gray-700/50 p-4 rounded-full">{icon}</div>
     </div>
   );
 };

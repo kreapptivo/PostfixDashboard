@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { TooltipProps } from 'recharts';
 import Header from './Header';
 import Sidebar from './Sidebar';
 import MailLogTable from './MailLogTable';
@@ -8,13 +9,23 @@ import MailVolumeChart from './MailVolumeChart';
 import RecentActivity from './RecentActivity';
 import AllowedNetworks from './AllowedNetworks';
 import StatCard from './StatCard';
-import { ChartBarIcon, DocumentTextIcon, ShieldCheckIcon, SparklesIcon } from './icons/IconComponents';
+import {
+  ChartBarIcon,
+  DocumentTextIcon,
+  ShieldCheckIcon,
+  SparklesIcon,
+} from './icons/IconComponents';
 import { MailVolumeData, MailStats, MailStatus } from '../types';
 import apiService, { ApiError } from '../services/apiService';
-import { getLastNDaysRange, getTodayRange, getThisWeekRange, getThisMonthRange } from '../utils/dateUtils';
-import { 
-  BarChart, 
-  Bar, 
+import {
+  getLastNDaysRange,
+  getTodayRange,
+  getThisWeekRange,
+  getThisMonthRange,
+} from '../utils/dateUtils';
+import {
+  BarChart,
+  Bar,
   LineChart,
   Line,
   AreaChart,
@@ -22,12 +33,12 @@ import {
   ComposedChart,
   RadialBarChart,
   RadialBar,
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
-  Legend, 
-  ResponsiveContainer
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
 } from 'recharts';
 
 interface DashboardProps {
@@ -41,12 +52,12 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   const [activeView, setActiveView] = useState<View>('dashboard');
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [chartType, setChartType] = useState<ChartType>('default');
-  const [stats, setStats] = useState<MailStats>({ 
-    total: 0, 
-    sent: 0, 
-    bounced: 0, 
-    deferred: 0, 
-    rejected: 0 
+  const [stats, setStats] = useState<MailStats>({
+    total: 0,
+    sent: 0,
+    bounced: 0,
+    deferred: 0,
+    rejected: 0,
   });
   const [volumeData, setVolumeData] = useState<MailVolumeData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -57,10 +68,10 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   const [filter, setFilter] = useState<{ startDate: string; endDate: string }>(defaultRange);
 
   // State for navigating to logs with filters
-  const [logFilter, setLogFilter] = useState<{ 
-    status?: MailStatus | 'all'; 
-    startDate?: string; 
-    endDate?: string 
+  const [logFilter, setLogFilter] = useState<{
+    status?: MailStatus | 'all';
+    startDate?: string;
+    endDate?: string;
   }>({});
 
   const fetchData = useCallback(async () => {
@@ -68,7 +79,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     setError(null);
     try {
       if (new Date(filter.endDate) < new Date(filter.startDate)) {
-        throw new Error("End date cannot be before the start date.");
+        throw new Error('End date cannot be before the start date.');
       }
 
       const query = {
@@ -99,21 +110,21 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
 
   useEffect(() => {
     if (activeView === 'dashboard') {
-      fetchData();
+      void fetchData();
     }
   }, [activeView, fetchData]);
 
   const handleFilterChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFilter(prev => ({ ...prev, [e.target.name]: e.target.value }));
+    setFilter((prev) => ({ ...prev, [e.target.name]: e.target.value }));
   };
 
   const handleApplyFilter = () => {
-    fetchData();
+    void fetchData();
   };
 
   const handleQuickFilter = async (type: 'today' | 'week' | 'month' | 'last7' | 'last30') => {
     let newFilter: { startDate: string; endDate: string };
-    
+
     switch (type) {
       case 'today':
         newFilter = getTodayRange();
@@ -133,9 +144,9 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
       default:
         newFilter = getLastNDaysRange(7);
     }
-    
+
     setFilter(newFilter);
-    
+
     // Fetch data immediately with the new filter
     setLoading(true);
     setError(null);
@@ -167,26 +178,33 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   };
 
   // Handle stat card clicks
-  const handleStatCardClick = useCallback((status: MailStatus | 'all') => {
-    setLogFilter({
-      status,
-      startDate: filter.startDate,
-      endDate: filter.endDate,
-    });
-    setActiveView('logs');
-  }, [filter.startDate, filter.endDate]);
+  const handleStatCardClick = useCallback(
+    (status: MailStatus | 'all') => {
+      setLogFilter({
+        status,
+        startDate: filter.startDate,
+        endDate: filter.endDate,
+      });
+      setActiveView('logs');
+    },
+    [filter.startDate, filter.endDate],
+  );
 
   // Custom Tooltip for charts
-  const CustomTooltip = ({ active, payload, label }: any) => {
+  const CustomTooltip = ({ active, payload, label }: TooltipProps<number, string>) => {
     if (active && payload && payload.length) {
       return (
         <div className="bg-gray-900 border border-gray-700 p-3 rounded-lg shadow-lg">
           <p className="text-gray-200 font-semibold mb-2">{label}</p>
-          {payload.map((entry: any, index: number) => (
-            <p key={index} className="text-sm" style={{ color: entry.color }}>
-              {entry.name}: {entry.value.toLocaleString()}
-            </p>
-          ))}
+          {payload.map((entry, index) => {
+            if (!entry) return null;
+            const displayValue = typeof entry.value === 'number' ? entry.value : Number(entry.value);
+            return (
+              <p key={index} className="text-sm" style={{ color: entry.color }}>
+                {entry.name}: {Number.isFinite(displayValue) ? displayValue.toLocaleString() : ''}
+              </p>
+            );
+          })}
         </div>
       );
     }
@@ -199,7 +217,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
       return <MailVolumeChart data={volumeData} />;
     }
 
-    const chartData = volumeData.map(item => ({
+    const chartData = volumeData.map((item) => ({
       date: item.date,
       sent: item.sent,
       bounced: item.bounced,
@@ -213,8 +231,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={chartData} margin={{ bottom: 20, left: 10, right: 10 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#444444" />
-              <XAxis 
-                dataKey="date" 
+              <XAxis
+                dataKey="date"
                 stroke="#9ca3af"
                 tick={{ fontSize: 12 }}
                 angle={-45}
@@ -236,8 +254,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
           <ResponsiveContainer width="100%" height={300}>
             <LineChart data={chartData} margin={{ bottom: 20, left: 10, right: 10 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#444444" />
-              <XAxis 
-                dataKey="date" 
+              <XAxis
+                dataKey="date"
                 stroke="#9ca3af"
                 tick={{ fontSize: 12 }}
                 angle={-45}
@@ -247,9 +265,33 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
               <YAxis stroke="#9ca3af" />
               <Tooltip content={<CustomTooltip />} />
               <Legend />
-              <Line type="monotone" dataKey="sent" stroke="#10b981" strokeWidth={3} name="Sent" dot={{ r: 4 }} activeDot={{ r: 6 }} />
-              <Line type="monotone" dataKey="bounced" stroke="#ef4444" strokeWidth={3} name="Bounced" dot={{ r: 4 }} activeDot={{ r: 6 }} />
-              <Line type="monotone" dataKey="deferred" stroke="#f59e0b" strokeWidth={3} name="Deferred" dot={{ r: 4 }} activeDot={{ r: 6 }} />
+              <Line
+                type="monotone"
+                dataKey="sent"
+                stroke="#10b981"
+                strokeWidth={3}
+                name="Sent"
+                dot={{ r: 4 }}
+                activeDot={{ r: 6 }}
+              />
+              <Line
+                type="monotone"
+                dataKey="bounced"
+                stroke="#ef4444"
+                strokeWidth={3}
+                name="Bounced"
+                dot={{ r: 4 }}
+                activeDot={{ r: 6 }}
+              />
+              <Line
+                type="monotone"
+                dataKey="deferred"
+                stroke="#f59e0b"
+                strokeWidth={3}
+                name="Deferred"
+                dot={{ r: 4 }}
+                activeDot={{ r: 6 }}
+              />
             </LineChart>
           </ResponsiveContainer>
         );
@@ -259,8 +301,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
           <ResponsiveContainer width="100%" height={300}>
             <AreaChart data={chartData} margin={{ bottom: 20, left: 10, right: 10 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#444444" />
-              <XAxis 
-                dataKey="date" 
+              <XAxis
+                dataKey="date"
                 stroke="#9ca3af"
                 tick={{ fontSize: 12 }}
                 angle={-45}
@@ -270,9 +312,33 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
               <YAxis stroke="#9ca3af" />
               <Tooltip content={<CustomTooltip />} />
               <Legend />
-              <Area type="monotone" dataKey="sent" stackId="1" stroke="#10b981" fill="#10b981" fillOpacity={0.6} name="Sent" />
-              <Area type="monotone" dataKey="bounced" stackId="1" stroke="#ef4444" fill="#ef4444" fillOpacity={0.6} name="Bounced" />
-              <Area type="monotone" dataKey="deferred" stackId="1" stroke="#f59e0b" fill="#f59e0b" fillOpacity={0.6} name="Deferred" />
+              <Area
+                type="monotone"
+                dataKey="sent"
+                stackId="1"
+                stroke="#10b981"
+                fill="#10b981"
+                fillOpacity={0.6}
+                name="Sent"
+              />
+              <Area
+                type="monotone"
+                dataKey="bounced"
+                stackId="1"
+                stroke="#ef4444"
+                fill="#ef4444"
+                fillOpacity={0.6}
+                name="Bounced"
+              />
+              <Area
+                type="monotone"
+                dataKey="deferred"
+                stackId="1"
+                stroke="#f59e0b"
+                fill="#f59e0b"
+                fillOpacity={0.6}
+                name="Deferred"
+              />
             </AreaChart>
           </ResponsiveContainer>
         );
@@ -282,8 +348,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={chartData} margin={{ bottom: 20, left: 10, right: 10 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#444444" />
-              <XAxis 
-                dataKey="date" 
+              <XAxis
+                dataKey="date"
                 stroke="#9ca3af"
                 tick={{ fontSize: 12 }}
                 angle={-45}
@@ -294,8 +360,20 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
               <Tooltip content={<CustomTooltip />} />
               <Legend />
               <Bar dataKey="sent" stackId="a" fill="#10b981" name="Sent" radius={[0, 0, 0, 0]} />
-              <Bar dataKey="deferred" stackId="a" fill="#f59e0b" name="Deferred" radius={[0, 0, 0, 0]} />
-              <Bar dataKey="bounced" stackId="a" fill="#ef4444" name="Bounced" radius={[8, 8, 0, 0]} />
+              <Bar
+                dataKey="deferred"
+                stackId="a"
+                fill="#f59e0b"
+                name="Deferred"
+                radius={[0, 0, 0, 0]}
+              />
+              <Bar
+                dataKey="bounced"
+                stackId="a"
+                fill="#ef4444"
+                name="Bounced"
+                radius={[8, 8, 0, 0]}
+              />
             </BarChart>
           </ResponsiveContainer>
         );
@@ -305,8 +383,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
           <ResponsiveContainer width="100%" height={300}>
             <ComposedChart data={chartData} margin={{ bottom: 20, left: 10, right: 10 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#444444" />
-              <XAxis 
-                dataKey="date" 
+              <XAxis
+                dataKey="date"
                 stroke="#9ca3af"
                 tick={{ fontSize: 12 }}
                 angle={-45}
@@ -316,15 +394,36 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
               <YAxis stroke="#9ca3af" />
               <Tooltip content={<CustomTooltip />} />
               <Legend />
-              <Area type="monotone" dataKey="total" fill="#3b82f6" stroke="#3b82f6" fillOpacity={0.3} name="Total" />
+              <Area
+                type="monotone"
+                dataKey="total"
+                fill="#3b82f6"
+                stroke="#3b82f6"
+                fillOpacity={0.3}
+                name="Total"
+              />
               <Bar dataKey="sent" fill="#10b981" name="Sent" radius={[4, 4, 0, 0]} />
-              <Line type="monotone" dataKey="bounced" stroke="#ef4444" strokeWidth={2} name="Bounced" dot={{ r: 3 }} />
-              <Line type="monotone" dataKey="deferred" stroke="#f59e0b" strokeWidth={2} name="Deferred" dot={{ r: 3 }} />
+              <Line
+                type="monotone"
+                dataKey="bounced"
+                stroke="#ef4444"
+                strokeWidth={2}
+                name="Bounced"
+                dot={{ r: 3 }}
+              />
+              <Line
+                type="monotone"
+                dataKey="deferred"
+                stroke="#f59e0b"
+                strokeWidth={2}
+                name="Deferred"
+                dot={{ r: 3 }}
+              />
             </ComposedChart>
           </ResponsiveContainer>
         );
 
-      case 'radial':
+      case 'radial': {
         // Calculate totals for radial chart
         const totalSent = chartData.reduce((sum, item) => sum + item.sent, 0);
         const totalBounced = chartData.reduce((sum, item) => sum + item.bounced, 0);
@@ -332,35 +431,50 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
         const grandTotal = totalSent + totalBounced + totalDeferred;
 
         const radialData = [
-          { name: 'Sent', value: totalSent, fill: '#10b981', percent: ((totalSent / grandTotal) * 100).toFixed(1) },
-          { name: 'Deferred', value: totalDeferred, fill: '#f59e0b', percent: ((totalDeferred / grandTotal) * 100).toFixed(1) },
-          { name: 'Bounced', value: totalBounced, fill: '#ef4444', percent: ((totalBounced / grandTotal) * 100).toFixed(1) },
+          {
+            name: 'Sent',
+            value: totalSent,
+            fill: '#10b981',
+            percent: grandTotal ? ((totalSent / grandTotal) * 100).toFixed(1) : '0.0',
+          },
+          {
+            name: 'Deferred',
+            value: totalDeferred,
+            fill: '#f59e0b',
+            percent: grandTotal ? ((totalDeferred / grandTotal) * 100).toFixed(1) : '0.0',
+          },
+          {
+            name: 'Bounced',
+            value: totalBounced,
+            fill: '#ef4444',
+            percent: grandTotal ? ((totalBounced / grandTotal) * 100).toFixed(1) : '0.0',
+          },
         ];
 
         return (
           <div className="flex flex-col items-center">
             <ResponsiveContainer width="100%" height={280}>
-              <RadialBarChart 
-                cx="50%" 
-                cy="50%" 
-                innerRadius="20%" 
-                outerRadius="90%" 
-                barSize={30} 
+              <RadialBarChart
+                cx="50%"
+                cy="50%"
+                innerRadius="20%"
+                outerRadius="90%"
+                barSize={30}
                 data={radialData}
                 startAngle={90}
                 endAngle={-270}
               >
-                <RadialBar
-                  background={{ fill: '#2d3748' }}
-                  dataKey="value"
-                  cornerRadius={10}
-                />
-                <Legend 
+                <RadialBar background={{ fill: '#2d3748' }} dataKey="value" cornerRadius={10} />
+                <Legend
                   iconSize={10}
                   layout="horizontal"
                   verticalAlign="bottom"
                   align="center"
-                  formatter={(value, entry: any) => `${value}: ${entry.payload.percent}%`}
+                  formatter={(value, entry) => {
+                    const payload = (entry as { payload?: { percent?: string } }).payload;
+                    const percent = typeof payload?.percent === 'string' ? payload.percent : '';
+                    return `${value}: ${percent}%`;
+                  }}
                 />
                 <Tooltip content={<CustomTooltip />} />
               </RadialBarChart>
@@ -372,6 +486,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
             </div>
           </div>
         );
+      }
 
       default:
         return <MailVolumeChart data={volumeData} />;
@@ -431,31 +546,31 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                 </div>
                 <div className="flex gap-2 flex-wrap">
                   <button
-                    onClick={() => handleQuickFilter('today')}
+                    onClick={() => void handleQuickFilter('today')}
                     className="px-3 py-2 bg-gray-700 text-gray-300 rounded-md hover:bg-gray-600 transition-colors text-sm"
                   >
                     Today
                   </button>
                   <button
-                    onClick={() => handleQuickFilter('week')}
+                    onClick={() => void handleQuickFilter('week')}
                     className="px-3 py-2 bg-gray-700 text-gray-300 rounded-md hover:bg-gray-600 transition-colors text-sm"
                   >
                     This Week
                   </button>
                   <button
-                    onClick={() => handleQuickFilter('last7')}
+                    onClick={() => void handleQuickFilter('last7')}
                     className="px-3 py-2 bg-gray-700 text-gray-300 rounded-md hover:bg-gray-600 transition-colors text-sm"
                   >
                     Last 7 Days
                   </button>
                   <button
-                    onClick={() => handleQuickFilter('last30')}
+                    onClick={() => void handleQuickFilter('last30')}
                     className="px-3 py-2 bg-gray-700 text-gray-300 rounded-md hover:bg-gray-600 transition-colors text-sm"
                   >
                     Last 30 Days
                   </button>
                   <button
-                    onClick={() => handleQuickFilter('month')}
+                    onClick={() => void handleQuickFilter('month')}
                     className="px-3 py-2 bg-gray-700 text-gray-300 rounded-md hover:bg-gray-600 transition-colors text-sm"
                   >
                     This Month
@@ -467,9 +582,25 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
             {loading && (
               <div className="text-center py-8 text-gray-400">
                 <div className="flex items-center justify-center">
-                  <svg className="animate-spin h-8 w-8 mr-3 text-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  <svg
+                    className="animate-spin h-8 w-8 mr-3 text-primary"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                  >
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    ></circle>
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                    ></path>
                   </svg>
                   Loading dashboard data...
                 </div>
@@ -487,10 +618,13 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                 {stats.total === 0 && (
                   <div className="bg-yellow-500/20 border border-yellow-500/50 text-yellow-300 p-4 rounded-md mb-4">
                     <p className="font-semibold">No mail logs found for the selected date range.</p>
-                    <p className="text-sm mt-1">Try selecting a different date range or check if your mail logs are being generated.</p>
+                    <p className="text-sm mt-1">
+                      Try selecting a different date range or check if your mail logs are being
+                      generated.
+                    </p>
                   </div>
                 )}
-                
+
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
                   <StatCard
                     title="Total Mails"
@@ -540,8 +674,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                         <button
                           onClick={() => setChartType('default')}
                           className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                            chartType === 'default' 
-                              ? 'bg-primary text-white' 
+                            chartType === 'default'
+                              ? 'bg-primary text-white'
                               : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                           }`}
                         >
@@ -550,8 +684,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                         <button
                           onClick={() => setChartType('bar')}
                           className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                            chartType === 'bar' 
-                              ? 'bg-primary text-white' 
+                            chartType === 'bar'
+                              ? 'bg-primary text-white'
                               : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                           }`}
                         >
@@ -560,8 +694,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                         <button
                           onClick={() => setChartType('line')}
                           className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                            chartType === 'line' 
-                              ? 'bg-primary text-white' 
+                            chartType === 'line'
+                              ? 'bg-primary text-white'
                               : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                           }`}
                         >
@@ -570,8 +704,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                         <button
                           onClick={() => setChartType('area')}
                           className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                            chartType === 'area' 
-                              ? 'bg-primary text-white' 
+                            chartType === 'area'
+                              ? 'bg-primary text-white'
                               : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                           }`}
                         >
@@ -580,8 +714,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                         <button
                           onClick={() => setChartType('stacked')}
                           className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                            chartType === 'stacked' 
-                              ? 'bg-primary text-white' 
+                            chartType === 'stacked'
+                              ? 'bg-primary text-white'
                               : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                           }`}
                         >
@@ -590,8 +724,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                         <button
                           onClick={() => setChartType('composed')}
                           className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                            chartType === 'composed' 
-                              ? 'bg-primary text-white' 
+                            chartType === 'composed'
+                              ? 'bg-primary text-white'
                               : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                           }`}
                         >
@@ -600,8 +734,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
                         <button
                           onClick={() => setChartType('radial')}
                           className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                            chartType === 'radial' 
-                              ? 'bg-primary text-white' 
+                            chartType === 'radial'
+                              ? 'bg-primary text-white'
                               : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                           }`}
                         >
@@ -636,9 +770,9 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
 
   return (
     <div className="flex h-screen bg-gray-900">
-      <Sidebar 
-        activeView={activeView} 
-        setActiveView={setActiveView} 
+      <Sidebar
+        activeView={activeView}
+        setActiveView={setActiveView}
         isCollapsed={isCollapsed}
         setIsCollapsed={setIsCollapsed}
       />

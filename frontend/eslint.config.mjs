@@ -33,6 +33,11 @@ export default [
         console: 'readonly',
         setTimeout: 'readonly',
         clearTimeout: 'readonly',
+        setInterval: 'readonly',
+        clearInterval: 'readonly',
+        fetch: 'readonly',
+        localStorage: 'readonly',
+        btoa: 'readonly',
       },
     },
     plugins: {
@@ -54,6 +59,7 @@ export default [
       ...(jsxA11y.configs.recommended?.rules ?? {}),
       ...(reactHooks.configs.recommended?.rules ?? {}),
       'react/prop-types': 'off',
+      'react/react-in-jsx-scope': 'off',
       '@typescript-eslint/no-misused-promises': [
         'error',
         {
