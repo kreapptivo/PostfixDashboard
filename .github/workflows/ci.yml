@@ -159,46 +159,25 @@ jobs:
 
       - name: Generate backend coverage badge
         if: hashFiles('coverage/backend/lcov.info') != ''
-        uses: ImBIOS/lcov-coverage-badge@v1            
-        with:
-          file: coverage/backend/lcov.info
-          access_token: ${{ secrets.GITHUB_TOKEN }}
-          style: flat
-          icon_name: googlecloud          
-          label: 'frontend coverage'
-          label_color: 'ffffff'
-          critical: 60
-          critical_color: '9c2c9c'
-          warning: 75
-          warning_color: 'd68f0c'
-          success_color: '43ad43'
-          message_color: 'ffffff'
+        run: npx --yes lcov-badge -o .github/badges/backend-coverage.svg coverage/backend/lcov.info
 
       - name: Generate frontend coverage badge
         if: hashFiles('coverage/frontend/lcov.info') != ''
-        uses: ImBIOS/lcov-coverage-badge@v1            
-        with:
-          file: coverage/frontend/lcov.info
-          access_token: ${{ secrets.GITHUB_TOKEN }}
-          style: flat
-          icon_name: googlecloud
-          label: 'backend coverage'
-          label_color: 'ffffff'
-          critical: 60
-          critical_color: '9c2c9c'
-          warning: 75
-          warning_color: 'd68f0c'
-          success_color: '43ad43'
-          message_color: 'ffffff'
+        run: npx --yes lcov-badge -o .github/badges/frontend-coverage.svg coverage/frontend/lcov.info
 
-      - name: Comment coverage on PR        
-        uses: zgosalvez/github-actions-report-lcov@v5.0.2
+      - name: Upload coverage badges artifact
+        uses: actions/upload-artifact@v4
         with:
-          coverage-files: coverage/*/lcov.info            
-          minimum-coverage: 60
+          name: coverage-badges
+          path: .github/badges/
+          retention-days: 7
+
+      - name: Comment coverage on PR
+        if: github.event_name == 'pull_request'
+        uses: daun/lcov-reporter-action@v0.6.0
+        with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          update-comment: true
-          title-prefix: Coverage Report
+          lcov-file: coverage/backend/lcov.info,coverage/frontend/lcov.info
 
   docker-build:
     name: Docker Build Test
