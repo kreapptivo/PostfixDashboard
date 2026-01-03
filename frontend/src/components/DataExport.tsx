@@ -1,20 +1,19 @@
-import React from 'react';
 import { ArrowDownTrayIcon } from './icons/IconComponents';
 
-interface DataExportProps<T extends Record<string, unknown>> {
+interface DataExportProps<T extends object> {
   data: T[];
   filename: string;
 }
 
-const DataExport = <T extends Record<string, unknown>>({ data, filename }: DataExportProps<T>) => {
+const DataExport = <T extends object>({ data, filename }: DataExportProps<T>) => {
   const convertToCSV = (objArray: T[]) => {
     if (objArray.length === 0) return '';
 
-    const headers = Object.keys(objArray[0]);
+    const headers = Object.keys(objArray[0]) as Array<keyof T>;
     const rows = objArray.map((row) =>
       headers
         .map((header) => {
-          const value = row[header];
+          const value = row[header] as unknown;
           if (value === null || value === undefined) return '';
           if (typeof value === 'object') {
             return JSON.stringify(value);

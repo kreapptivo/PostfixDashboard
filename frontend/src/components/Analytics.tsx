@@ -146,15 +146,15 @@ const Analytics: React.FC = () => {
     void fetchAnalytics();
   };
 
-  const exportToCSV = <T extends Record<string, unknown>>(data: T[], filename: string) => {
+  const exportToCSV = <T extends object>(data: T[], filename: string) => {
     if (data.length === 0) return;
 
-    const headers = Object.keys(data[0]);
+    const headers = Object.keys(data[0]) as Array<keyof T>;
     const rows = data
       .map((item) =>
         headers
           .map((header) => {
-            const value = item[header];
+            const value = item[header] as unknown;
             if (value === null || value === undefined) return '';
             if (typeof value === 'object') return JSON.stringify(value);
             if (typeof value === 'symbol') return value.toString();
