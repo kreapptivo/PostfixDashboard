@@ -165,12 +165,14 @@ jobs:
         if: hashFiles('coverage/frontend/lcov.info') != ''
         run: npx --yes lcov-badge -o .github/badges/frontend-coverage.svg coverage/frontend/lcov.info
 
-      - name: Upload coverage badges artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-badges
-          path: .github/badges/
-          retention-days: 7
+      - name: Commit coverage badges
+        if: github.event_name == 'pull_request'
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add .github/badges/*.svg || true
+          git diff --staged --quiet || git commit -m "Update coverage badges [skip ci]"
+          git push || true
 
   docker-build:
     name: Docker Build Test
