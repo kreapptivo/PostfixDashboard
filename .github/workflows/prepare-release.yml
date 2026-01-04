@@ -1,0 +1,124 @@
+name: Prepare Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Target version (e.g. 2.4.0) or "auto" to recommend'
+        required: true
+        type: string
+        default: 'auto'
+      dry_run:
+        description: 'Perform a dry run (no commits/tags/releases)'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  prepare-release:
+    name: Prepare Release (Version Suggestion & Draft)
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.calculated_version.outputs.version }}
+      bump_type: ${{ steps.determine-bump.outputs.bump_type }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'      
+
+      - name: Determine version bump type
+        id: determine-bump
+        run: |
+          if [ "${{ github.event.inputs.version }}" != "auto" ]; then
+            echo "bump_type=manual" >> $GITHUB_OUTPUT
+            echo "manual_version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+            echo "Using provided version: ${{ github.event.inputs.version }}"
+            exit 0
+          fi
+
+          echo "Analyzing commits using conventional-recommended-bump..."
+
+          BUMP_TYPE=$(npx --yes -p conventional-recommended-bump -p conventional-changelog-conventionalcommits node -e "const crb=require('conventional-recommended-bump');crb({preset:'conventionalcommits'},(err,res)=>{if(err){console.error(err);process.exit(1);}const type=res&&res.releaseType?res.releaseType:'patch';console.log(type);});" | tr -d '\n')
+
+          echo "Suggested bump type: $BUMP_TYPE"
+          echo "bump_type=$BUMP_TYPE" >> $GITHUB_OUTPUT
+
+      - name: Calculate next version
+        id: calculated_version
+        run: |
+          INPUT_VERSION="${{ github.event.inputs.version }}"
+          CURRENT_VERSION=$(node -p "require('./package.json').version")
+          BUMP_TYPE=${{ steps.determine-bump.outputs.bump_type }}
+          MANUAL_VERSION=${{ steps.determine-bump.outputs.manual_version }}
+
+          if [ "$INPUT_VERSION" != "auto" ]; then
+            if ! npx --yes semver "$INPUT_VERSION" >/dev/null 2>&1; then
+              echo "❌ ERROR: Provided version must be valid semver (e.g. 2.4.0)"
+              exit 1
+            fi
+            NEXT_VERSION="$INPUT_VERSION"
+          else
+            # Calculate next version (semantic versioning) based on recommended bump using semver CLI
+            NEXT_VERSION=$(npx --yes semver -i ${BUMP_TYPE:-patch} "$CURRENT_VERSION")
+          fi
+
+          echo "Current version: $CURRENT_VERSION"
+          echo "Suggested version: $NEXT_VERSION"
+          echo "version=$NEXT_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Validate changelog is valid and has a non-empty unreleased section  
+        run: npx kacl prerelease
+  
+      - name: Create GitHub Release (Draft)
+        if: github.event.inputs.dry_run != 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: '${{ steps.calculated_version.outputs.version }}'
+          name: 'Release ${{ steps.calculated_version.outputs.version }}'
+          draft: true
+          body: |
+            **Release Type:** `${{ steps.determine-bump.outputs.bump_type }}`
+            
+            > ℹ️ **Note:** Detailed release notes from CHANGELOG.md will be appended when published.
+            
+            ### Pre-Publication Checklist
+            
+            - [ ] [Unreleased] section in CHANGELOG.md contains correct entries
+            - [ ] Commit history aligns with changelog entries
+            - [ ] Version bump type (`${{ steps.determine-bump.outputs.bump_type }}`) is appropriate
+            - [ ] All CI checks have passed
+            - [ ] Docker image builds and tests are green
+            
+            ### What Happens on Publish
+            
+            The [Unreleased] section from CHANGELOG.md will be automatically converted to this release's section and appended below this message.
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Summary
+        run: |
+          echo "## Release Preparation Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Suggested Version:** ${{ steps.calculated_version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Bump Type:** ${{ steps.determine-bump.outputs.bump_type }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Tag:** v${{ steps.calculated_version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Status:** Draft Release Created" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Next Steps" >> $GITHUB_STEP_SUMMARY
+          echo "1. Review the [Unreleased] section in CHANGELOG.md" >> $GITHUB_STEP_SUMMARY
+          echo "2. Verify version suggestion: v${{ steps.calculated_version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "3. Publish the draft release on GitHub to trigger:" >> $GITHUB_STEP_SUMMARY
+          echo "   - Version gets bumped (npm version + sync-versions)" >> $GITHUB_STEP_SUMMARY
+          echo "   - CHANGELOG.md will be updated ([Unreleased] → release section)" >> $GITHUB_STEP_SUMMARY
+          echo "   - Release notes population" >> $GITHUB_STEP_SUMMARY
+          echo "   - Docker image build and push" >> $GITHUB_STEP_SUMMARY
