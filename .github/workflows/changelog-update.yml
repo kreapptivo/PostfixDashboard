@@ -1,0 +1,33 @@
+name: Update Changelog
+
+on:
+  push:
+    branches: [ main ]
+
+permissions:
+  contents: write
+
+jobs:
+  update-changelog:
+    name: Update Changelog (Unreleased)
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Update Changelog
+        uses: stefanzweifel/changelog-updater-action@v1
+        with:
+          latest-version: Unreleased
+          release-notes: ${{ github.event.head_commit.message }}
+          parse-github-usernames: true
+      
+      - name: Commit updated Changelog
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: 'docs: update CHANGELOG.md for Unreleased section [skip ci]'
+          file_pattern: CHANGELOG.md

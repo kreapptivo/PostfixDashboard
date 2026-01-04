@@ -3,8 +3,23 @@ name: CI
 on:
   pull_request:
     branches: [ main ]
+  push:
+    branches: [ main ]
 
 jobs:
+  commitlint:
+    name: Validate Commit Messages
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Validate commits
+        uses: wagoid/commitlint-github-action@v6
+
   backend-build:
     name: Backend Build & Test
     runs-on: ubuntu-latest
