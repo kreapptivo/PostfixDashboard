@@ -2,6 +2,10 @@
   "name": "postfix-dashboard-hooks",
   "private": true,
   "version": "2.3.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kreapptivo/PostfixDashboard"
+  },
   "workspaces": [
     "backend",
     "frontend"
