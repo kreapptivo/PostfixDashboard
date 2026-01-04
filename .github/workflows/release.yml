@@ -1,0 +1,250 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Optional: Version-Tag (ohne v), z.B. 2.4.0'
+        required: false
+        type: string
+        default: ''
+      target_branch:
+        description: 'Branch, auf dem der Draft liegt'
+        required: false
+        type: string
+        default: 'main'
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  changelog-and-release:
+    name: Version bump, changelog update, and release notes
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.draft.outputs.tag }}
+      target_commitish: ${{ steps.draft.outputs.target_commitish }}
+
+    steps:
+      - name: Resolve draft release
+        id: draft
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BRANCH="${{ inputs.target_branch }}"
+          INPUT_VERSION="${{ inputs.version }}"
+
+          if [ -z "$INPUT_VERSION" ]; then
+            # Suche letzten Draft auf Branch
+            DRAFTS=$(gh release list --limit 30 --json tagName,draft,targetCommitish,createdAt,body \
+              | jq -c --arg BR "$BRANCH" '[.[] | select(.draft==true and .targetCommitish==$BR)] | sort_by(.createdAt)')
+            COUNT=$(printf '%s' "$DRAFTS" | jq 'length')
+            if [ "$COUNT" -eq 0 ]; then
+              echo "❌ Kein Draft auf Branch $BRANCH gefunden"; exit 1
+            fi
+            if [ "$COUNT" -gt 1 ]; then
+              echo "❌ Mehrere Drafts auf Branch $BRANCH gefunden; bitte Version angeben"; exit 1
+            fi
+            TAG=$(printf '%s' "$DRAFTS" | jq -r '.[0].tagName')
+            BODY=$(printf '%s' "$DRAFTS" | jq -r '.[0].body')
+            TARGET="$BRANCH"
+          else
+            TAG="$INPUT_VERSION"
+            if ! gh release view "$TAG" --json draft,body,targetCommitish >/tmp/release.json; then
+              echo "❌ Kein Draft-Release mit Tag $TAG gefunden"; exit 1
+            fi
+            if [ "$(jq -r '.draft' /tmp/release.json)" != "true" ]; then
+              echo "❌ Release $TAG ist nicht (mehr) Draft"; exit 1
+            fi
+            BODY=$(jq -r '.body' /tmp/release.json)
+            TARGET=$(jq -r '.targetCommitish // empty' /tmp/release.json)
+            [ -z "$TARGET" ] && TARGET="$BRANCH"
+          fi
+
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "target_commitish=$TARGET" >> $GITHUB_OUTPUT
+          # Use heredoc to safely handle backticks and special characters in release body
+          {
+            echo "body<<'EOF'"
+            echo "$BODY"
+            echo "EOF"
+          } >> $GITHUB_OUTPUT
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ steps.draft.outputs.target_commitish }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Validate release notes have been edited
+        run: |
+          if printf '%s' "${{ steps.draft.outputs.body }}" | grep -q "Detailed release notes from CHANGELOG.md will be appended"; then
+            echo "❌ ERROR: Release draft hat noch den Platzhalter-Text"
+            exit 1
+          fi
+          echo "✅ Release notes sind bearbeitet"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Check if version and changelog already updated
+        id: check-already-released
+        run: |
+          CURRENT_VERSION=$(node -p "require('./package.json').version")
+          TARGET_VERSION="${{ steps.draft.outputs.tag }}"
+          
+          # Check if version already bumped
+          if [ "$CURRENT_VERSION" = "$TARGET_VERSION" ]; then
+            echo "already_bumped=true" >> $GITHUB_OUTPUT
+            echo "✅ Version bereits auf $TARGET_VERSION aktualisiert"
+          else
+            echo "already_bumped=false" >> $GITHUB_OUTPUT
+            echo "⏳ Version wird aktualisiert: $CURRENT_VERSION -> $TARGET_VERSION"
+          fi
+          
+          # Check if changelog already has release section
+          if grep -q "^## \[$TARGET_VERSION\]" CHANGELOG.md; then
+            echo "changelog_updated=true" >> $GITHUB_OUTPUT
+            echo "✅ Changelog bereits für $TARGET_VERSION aktualisiert"
+          else
+            echo "changelog_updated=false" >> $GITHUB_OUTPUT
+            echo "⏳ Changelog wird für $TARGET_VERSION aktualisiert"
+          fi
+
+      - name: Validate changelog is valid and has a non-empty unreleased section
+        if: steps.check-already-released.outputs.changelog_updated == 'false'
+        run: npx kacl prerelease
+
+      - name: Install dependencies
+        if: steps.check-already-released.outputs.already_bumped == 'false'
+        run: npm ci
+      
+      - name: Bump version in package.json
+        if: steps.check-already-released.outputs.already_bumped == 'false'
+        run: |
+          CURRENT_VERSION=$(node -p "require('./package.json').version")
+          echo "Current version: $CURRENT_VERSION"
+          npm version ${{ steps.draft.outputs.tag }} --no-git-tag-version
+          echo "✅ Updated package.json to version ${{ steps.draft.outputs.tag }}"
+
+      - name: Release changelog using keep-a-changelog
+        if: steps.check-already-released.outputs.changelog_updated == 'false'
+        run: |
+          npx -p keep-a-changelog changelog --release ${{ steps.draft.outputs.tag }}
+          if ! grep -q "${{ steps.draft.outputs.tag }}" CHANGELOG.md; then
+            echo "❌ Changelog update fehlgeschlagen"
+            exit 1
+          fi
+
+      - name: Configure Git
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+
+      - name: Commit version bump, changelog update
+        if: steps.check-already-released.outputs.already_bumped == 'false' || steps.check-already-released.outputs.changelog_updated == 'false'
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: 'chore(release): bump version to ${{ steps.draft.outputs.tag }} and update CHANGELOG'
+          file_pattern: 'package.json package-lock.json backend/version.js frontend/src/config/version.ts CHANGELOG.md'
+          branch: ${{ steps.draft.outputs.target_commitish }}
+
+      - name: Extract release notes from changelog
+        run: npx -p keep-a-changelog changelog --latest-release-full > release-notes.md
+
+      - name: Update GitHub release body
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.draft.outputs.tag }}
+          draft: true # still a draft, do not release yet
+          body_path: release-notes.md
+          append_body: true
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+  build-docker-images:
+    name: Build and push Docker images
+    runs-on: ubuntu-latest
+    needs: changelog-and-release
+    strategy:
+      matrix:
+        service: [frontend, backend]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ needs.changelog-and-release.outputs.target_commitish }}
+
+      - name: Generate Docker metadata for ${{ matrix.service }}
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            ghcr.io/${{ github.repository }}/${{ matrix.service }}
+          tags: |
+            # voller Tag (z.B. 1.2.3)
+            type=semver,pattern={{version}},value=${{ needs.changelog-and-release.outputs.tag }}
+            # Major.Minor (z.B. 1.2)
+            type=semver,pattern={{major}}.{{minor}},value=${{ needs.changelog-and-release.outputs.tag }}
+            # Major (z.B. 1), nur wenn Major != 0
+            type=semver,pattern={{major}},value=${{ needs.changelog-and-release.outputs.tag }},enable=${{ !startsWith(needs.changelog-and-release.outputs.tag, '0.') }}
+            # edge-Tag für main
+            type=edge,branch=main
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Docker Setup Buildx        
+        uses:  docker/setup-buildx-action@v3        
+
+      - name: Build and push ${{ matrix.service }} image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./${{ matrix.service }}/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  update-release-with-docker-images:
+    name: Add Docker image links to release and publish release
+    runs-on: ubuntu-latest
+    needs: [ build-docker-images, changelog-and-release ]
+    steps:
+      - name: Update release with Docker image links
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: false
+          tag_name: ${{ needs.changelog-and-release.outputs.tag }}
+          body: |
+            
+            ## 🐳 Docker Images
+            
+            Pull the images with:
+            ```bash
+            docker pull ghcr.io/${{ github.repository }}/frontend:${{ needs.changelog-and-release.outputs.tag }}
+            docker pull ghcr.io/${{ github.repository }}/backend:${{ needs.changelog-and-release.outputs.tag }}
+            ```
+            
+            Or use `latest`:
+            ```bash
+            docker pull ghcr.io/${{ github.repository }}/frontend:latest
+            docker pull ghcr.io/${{ github.repository }}/backend:latest
+            ```
+            
+            **Available on:** [GitHub Container Registry](https://github.com/${{ github.repository }}/pkgs/container/${{ github.repository }})
+          append_body: true
+          token: ${{ secrets.GITHUB_TOKEN }}

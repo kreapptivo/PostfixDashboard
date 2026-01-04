@@ -1,0 +1,166 @@
+name: Changelog validation
+
+on:
+  pull_request:
+    branches: [ main ]
+    types: [opened, synchronize, reopened, ready_for_review, labeled]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  check-and-suggest:
+    name: Check changelog and suggest updates
+    runs-on: ubuntu-latest
+    if: github.event.action != 'labeled'
+
+    steps:
+      - name: Checkout pull request
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.ref }}
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+    
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'      
+
+      - name: Validate changelog
+        run: npx kacl lint && echo "✅ Changelog validation passed"
+
+      - name: Check if changelog was manually updated
+        id: manual_update
+        run: |
+          if git diff origin/main...HEAD --quiet -- CHANGELOG.md; then
+            echo "updated=false" >> $GITHUB_OUTPUT
+            echo "⚠️ CHANGELOG.md has not been updated"
+          else
+            echo "updated=true" >> $GITHUB_OUTPUT
+            echo "✅ CHANGELOG.md has been updated manually"
+          fi
+
+      - name: Install dependencies for commit parsing
+        if: steps.manual_update.outputs.updated == 'false'
+        run: npm install --no-save conventional-commits-parser
+
+      - name: Parse commits and generate changelog entries
+        if: steps.manual_update.outputs.updated == 'false'
+        id: generate_changelog
+        run: |
+          node scripts/parse-changelog-entries.mjs preview >> $GITHUB_OUTPUT
+          echo "has_changes=true" >> $GITHUB_OUTPUT
+
+      - name: Post changelog suggestion as comment
+        if: steps.manual_update.outputs.updated == 'false' && steps.generate_changelog.outputs.has_changes == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const preview = `${{ steps.generate_changelog.outputs.preview }}`;
+            
+            const commentBody = `## 📋 Changelog Update Required
+            
+            The CHANGELOG.md file has not been updated in this PR. Here are suggested entries based on your commits:
+            
+            ${preview}
+            
+            ### Options:
+            
+            1. **Manual Update** (Recommended): Edit CHANGELOG.md yourself for better descriptions
+            2. **Auto-Apply**: Add the label \`changelog-approved\` to automatically commit these entries
+            
+            ---
+            *This is an automated suggestion. Feel free to modify the entries as needed.*`;
+            
+            // Check if comment already exists
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            
+            const botComment = comments.find(comment => 
+              comment.user.type === 'Bot' && 
+              comment.body.includes('📋 Changelog Update Required')
+            );
+            
+            if (botComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: commentBody
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: commentBody
+              });
+            }
+
+      - name: Fail if changelog not updated
+        if: steps.manual_update.outputs.updated == 'false' && steps.generate_changelog.outputs.has_changes == 'true'
+        run: |
+          echo "❌ CHANGELOG.md needs to be updated"
+          echo "Please update manually or add 'changelog-approved' label to auto-apply suggestions"
+          exit 1
+
+  auto-update-changelog:
+    name: Auto-update changelog with approval
+    runs-on: ubuntu-latest
+    if: github.event.action == 'labeled' && github.event.label.name == 'changelog-approved'
+
+    steps:
+      - name: Checkout pull request
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.ref }}
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Configure Git
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+
+      - name: Check if changelog already updated
+        id: check_existing
+        run: |
+          if git diff origin/main...HEAD --quiet -- CHANGELOG.md; then
+            echo "needs_update=true" >> $GITHUB_OUTPUT
+          else
+            echo "needs_update=false" >> $GITHUB_OUTPUT
+            echo "✅ CHANGELOG.md already updated, skipping"
+          fi
+
+      - name: Install dependencies for commit parsing
+        if: steps.check_existing.outputs.needs_update == 'true'
+        run: npm install --no-save conventional-commits-parser
+
+      - name: Generate and apply changelog entries
+        if: steps.check_existing.outputs.needs_update == 'true'
+        run: node scripts/parse-changelog-entries.mjs apply
+
+      - name: Validate updated changelog
+        if: steps.check_existing.outputs.needs_update == 'true'
+        run: npx --yes kacl lint
+
+      - name: Commit changelog updates
+        if: steps.check_existing.outputs.needs_update == 'true'
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: 'docs(changelog): auto-update from conventional commits [skip ci]'
+          file_pattern: 'CHANGELOG.md'
+          branch: ${{ github.event.pull_request.head.ref }}
