@@ -5,6 +5,24 @@ All notable changes to the Postfix Mail Relay Dashboard project will be document
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Added
+- Production and development Docker Compose setups (Traefik reverse proxy, TLS handling, rate limits)
+- GitHub Actions for backend/frontend CI with linting, tests, coverage badges, and Docker build checks
+- Multi-arch Docker image build-and-publish workflow to GHCR for frontend and backend
+- Repository-wide Prettier/ESLint tooling wired into simple-git-hooks
+- npm workspaces setup with centralized version management and auto-generated version constants
+
+### Changed
+- Documentation and badges reorganized to align with automated CI artifacts
+- Version handling unified across backend and frontend using root package.json as single source of truth
+- CI workflow optimized to use workspace-based dependency installation and caching
+
+### Fixed
+- Frontend Nginx config no longer overrides API paths or base URL, keeping SPA routing intact
+- CORS origin handling honors the configured allowlist to prevent blocked requests
+
 ## [2.2.0] - 2025-11-01
 
 ### Added
