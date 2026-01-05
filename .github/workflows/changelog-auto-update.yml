@@ -51,7 +51,7 @@ jobs:
         if: steps.manual_update.outputs.updated == 'false'
         id: generate_changelog
         run: |
-          node scripts/parse-changelog-entries.js preview >> $GITHUB_OUTPUT
+          node scripts/parse-changelog-entries.mjs preview >> $GITHUB_OUTPUT
           echo "has_changes=true" >> $GITHUB_OUTPUT
 
       - name: Post changelog suggestion as comment
@@ -151,7 +151,7 @@ jobs:
 
       - name: Generate and apply changelog entries
         if: steps.check_existing.outputs.needs_update == 'true'
-        run: node scripts/parse-changelog-entries.js apply
+        run: node scripts/parse-changelog-entries.mjs apply
 
       - name: Validate updated changelog
         if: steps.check_existing.outputs.needs_update == 'true'
