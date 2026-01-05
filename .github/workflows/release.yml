@@ -33,7 +33,11 @@ jobs:
 
       - name: Validate release notes have been edited
         run: |
-          RELEASE_BODY="${{ github.event.release.body }}"
+          # Use heredoc to safely handle backticks and special characters in release body
+          RELEASE_BODY=$(cat <<'EOF'
+          ${{ github.event.release.body }}
+          EOF
+          )
           
           # Check if release body still contains the default template markers
           if echo "$RELEASE_BODY" | grep -q "Detailed release notes from CHANGELOG.md will be appended"; then
