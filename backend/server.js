@@ -10,6 +10,7 @@ const { promisify } = require('util');
 const { GoogleGenAI, Type } = require('@google/genai');
 const crypto = require('crypto');
 const { Buffer } = require('node:buffer');
+const { appVersion } = require('./version');
 
 require('dotenv').config();
 
@@ -1184,17 +1185,30 @@ Be specific, cite log entries, identify patterns, and prioritize by severity. Re
   }
 });
 
+/**
+ * @typedef {Object} HealthResponse
+ * @property {'ok'} status
+ * @property {string} timestamp ISO timestamp
+ * @property {number} uptime process uptime in seconds
+ * @property {string} version current backend/app version
+ * @property {{ gemini: boolean; ollama: string }} ai AI provider status
+ */
+
 // Health check endpoint
 app.get('/api/health', (req, res) => {
-  res.json({
+  /** @type {HealthResponse} */
+  const payload = {
     status: 'ok',
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
+    version: appVersion,
     ai: {
       gemini: !!ai,
       ollama: config.ai.ollama.baseUrl,
     },
-  });
+  };
+
+  res.json(payload);
 });
 
 // Start server only when executed directly (not when required in tests)

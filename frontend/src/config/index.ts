@@ -3,6 +3,8 @@
 // ============================================
 // Path: postfix-dashboard/frontend/src/config/index.ts
 
+import appVersion from './version';
+
 // Centralized configuration
 const config = {
   api: {
@@ -18,7 +20,7 @@ const config = {
   },
   app: {
     name: import.meta.env.VITE_APP_NAME || 'Postfix Dashboard',
-    version: import.meta.env.VITE_APP_VERSION || '2.2.0',
+    version: appVersion,
   },
   pagination: {
     defaultPageSize: 50,
