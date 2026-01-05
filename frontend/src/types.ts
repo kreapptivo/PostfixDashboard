@@ -129,3 +129,16 @@ export interface AnalyticsSummary {
     end: string;
   };
 }
+
+export interface HealthAIStatus {
+  gemini: boolean;
+  ollama: string;
+}
+
+export interface HealthResponse {
+  status: 'ok';
+  timestamp: string;
+  uptime: number;
+  version: string;
+  ai: HealthAIStatus;
+}

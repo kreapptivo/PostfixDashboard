@@ -1,9 +1,6 @@
 /** @type {import('tailwindcss').Config} */
 export default {
-  content: [
-    "./index.html",
-    "./src/**/*.{js,ts,jsx,tsx}",
-  ],
+  content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
   theme: {
     extend: {
       colors: {
@@ -16,13 +13,13 @@ export default {
         'gray-300': '#d1d5db',
         'gray-200': '#e5e7eb',
         'gray-100': '#f3f4f6',
-        'primary': '#3b82f6',
+        primary: '#3b82f6',
         'primary-hover': '#2563eb',
-        'success': '#10b981',
-        'danger': '#ef4444',
-        'warning': '#f59e0b',
+        success: '#10b981',
+        danger: '#ef4444',
+        warning: '#f59e0b',
       },
     },
   },
   plugins: [],
-}
+};

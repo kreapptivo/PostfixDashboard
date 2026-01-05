@@ -100,7 +100,7 @@ const Pagination: React.FC<PaginationProps> = ({
           <span className="font-medium text-gray-200">{endItem}</span> of{' '}
           <span className="font-medium text-gray-200">{totalItems}</span> results
         </div>
-        
+
         {onPageSizeChange && (
           <div className="flex items-center gap-2">
             <label htmlFor="pageSize" className="text-sm text-gray-400">
@@ -131,7 +131,7 @@ const Pagination: React.FC<PaginationProps> = ({
         >
           First
         </button>
-        
+
         <button
           onClick={handlePrevious}
           disabled={!canGoPrevious}
@@ -151,8 +151,8 @@ const Pagination: React.FC<PaginationProps> = ({
                 page === currentPage
                   ? 'bg-primary text-white font-medium'
                   : page === '...'
-                  ? 'bg-transparent text-gray-500 cursor-default'
-                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                    ? 'bg-transparent text-gray-500 cursor-default'
+                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
               }`}
             >
               {page}
