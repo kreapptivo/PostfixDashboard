@@ -111,7 +111,7 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "- **Suggested Version:** ${{ steps.calculated_version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Bump Type:** ${{ steps.determine-bump.outputs.bump_type }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Tag:** v${{ steps.calculated_version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Tag:** ${{ steps.calculated_version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Status:** Draft Release Created" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Next Steps" >> $GITHUB_STEP_SUMMARY
