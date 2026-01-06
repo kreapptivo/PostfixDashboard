@@ -155,7 +155,7 @@ jobs:
             type=semver,pattern={{major}}.{{minor}},match=(.*)
             type=semver,pattern={{major}},match=(.*)
             type=ref,event=branch,prefix={{branch}}-
-            type=sha,prefix={{branch}}-
+            type=sha,event=branch,prefix={{branch}}-
 
       - name: Build and push ${{ matrix.service }} image
         uses: docker/build-push-action@v5
