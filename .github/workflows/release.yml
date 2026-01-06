@@ -84,17 +84,14 @@ jobs:
           
           echo "✅ Updated package.json to version ${{ steps.meta.outputs.version }}"
 
-      - name: Sync versions to backend and frontend
-        run: npm run sync-versions
-
       - name: Release changelog using keep-a-changelog
         run: |
-          npx changelog --release ${{ steps.meta.outputs.version }}
+          npx -p keep-a-changelog changelog --release ${{ steps.meta.outputs.version }}
 
       - name: Extract release notes from changelog
         id: notes
         run: |
-          NOTES=$(npx changelog --latest-release-full)
+          NOTES=$(npx -p keep-a-changelog changelog --latest-release-full)
           echo "$NOTES"
           {
             echo "body<<'EOF'"
