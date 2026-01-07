@@ -2,6 +2,10 @@
   "name": "postfix-dashboard-hooks",
   "private": true,
   "version": "2.2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kreapptivo/PostfixDashboard"
+  },
   "workspaces": [
     "backend",
     "frontend"
@@ -13,9 +17,12 @@
     "version": "npm run sync-versions"
   },
   "devDependencies": {
+    "@commitlint/cli": "^19.6.1",
+    "@commitlint/config-conventional": "^19.6.0",
     "simple-git-hooks": "^2.13.1"
   },
   "simple-git-hooks": {
-    "pre-commit": "npm run -s pre-commit"
+    "pre-commit": "npm run -s pre-commit",
+    "commit-msg": "npx commitlint --edit $1"
   }
 }

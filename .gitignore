@@ -1,5 +1,6 @@
 dist
 node_modules
+coverage
 .env.production
 
 # Workspace: only root package-lock.json is used
