@@ -130,8 +130,7 @@ function applyChangelog(entries) {
 
   for (const [category, categoryEntries] of Object.entries(entries)) {
     for (const entry of categoryEntries) {
-      const cmd = `npx --yes ${categoryMap[category]} "${entry.replace(/"/g, '\\"')}"`;
-      execSync(cmd, { stdio: 'inherit' });
+      execSync('npx', ['--yes', categoryMap[category], entry], { stdio: 'inherit' });
     }
   }
 }
