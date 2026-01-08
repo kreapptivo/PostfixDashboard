@@ -18,7 +18,7 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 // Define allowed origins (can be overridden via ALLOWED_ORIGINS env, comma-separated)
-const defaultAllowedOrigins = ['http://localhost'];
+const defaultAllowedOrigins = ['http://localhost', 'http://localhost:5173'];
 
 const envAllowedOrigins = (process.env.ALLOWED_ORIGINS || '')
   .split(',')
