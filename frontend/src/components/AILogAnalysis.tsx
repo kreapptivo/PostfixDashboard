@@ -2,8 +2,8 @@
 // FILE: frontend/src/components/AILogAnalysis.tsx
 // ============================================
 
-import React, { useState, useCallback } from 'react';
-import { AILogAnalysisResult } from '../types';
+import React, { useState, useCallback, useEffect } from 'react';
+import { AILogAnalysisResult, AIProviderHealth, AnalyzeLogsRequest, AIProvider } from '../types';
 import {
   SparklesIcon,
   ExclamationTriangleIcon,
@@ -14,7 +14,6 @@ import {
 } from './icons/IconComponents';
 import apiService, { ApiError } from '../services/apiService';
 
-type Provider = 'ollama' | 'gemini';
 type AnalysisMode = 'recent' | 'manual';
 
 type LogSample = {
@@ -25,28 +24,16 @@ type LogSample = {
   message?: string;
 };
 
-// const AILogAnalysis: React.FC = () => {
-//   const [analysisResult, setAnalysisResult] = useState<AILogAnalysisResult | null>(null);
-//   const [isLoading, setIsLoading] = useState(false);
-//   const [error, setError] = useState<string | null>(null);
+interface AILogAnalysisProps {
+  aiProviders?: AIProviderHealth[];
+}
 
-//   const [provider, setProvider] = useState<'ollama' | 'gemini'>('ollama');
-//   const [ollamaUrl, setOllamaUrl] = useState('http://192.168.5.217:11434');
-//   const [manualInput, setManualInput] = useState('');
-//   const [analysisMode, setAnalysisMode] = useState<'recent' | 'manual'>('recent');
-//   const [logLimit, setLogLimit] = useState(50);
-const AILogAnalysis: React.FC = () => {
+const AILogAnalysis: React.FC<AILogAnalysisProps> = ({ aiProviders = [] }) => {
   const [analysisResult, setAnalysisResult] = useState<AILogAnalysisResult | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Get AI settings from environment or use defaults
-  const envProvider = import.meta.env.VITE_AI_PROVIDER;
-  const defaultProvider: Provider = envProvider === 'gemini' ? 'gemini' : 'ollama';
-  const defaultOllamaUrl =
-    typeof import.meta.env.VITE_OLLAMA_API_BASE_URL === 'string'
-      ? import.meta.env.VITE_OLLAMA_API_BASE_URL
-      : 'http://localhost:11434';
   const defaultLogLimit = Number.parseInt(
     typeof import.meta.env.VITE_AI_ANALYSIS_DEFAULT_LOGS === 'string'
       ? import.meta.env.VITE_AI_ANALYSIS_DEFAULT_LOGS
@@ -54,11 +41,22 @@ const AILogAnalysis: React.FC = () => {
     10,
   );
 
-  const [provider, setProvider] = useState<Provider>(defaultProvider);
-  const [ollamaUrl, setOllamaUrl] = useState(defaultOllamaUrl);
   const [manualInput, setManualInput] = useState('');
   const [analysisMode, setAnalysisMode] = useState<AnalysisMode>('recent');
   const [logLimit, setLogLimit] = useState(Number.isFinite(defaultLogLimit) ? defaultLogLimit : 50);
+  const [availableProviders, setAvailableProviders] = useState<AIProviderHealth[]>([]);
+  const [selectedProvider, setSelectedProvider] = useState<AIProvider | ''>('');
+
+  useEffect(() => {
+    setAvailableProviders(aiProviders);
+
+    if (selectedProvider) {
+      const stillValid = aiProviders.find((p) => p.provider === selectedProvider && p.healthy);
+      if (!stillValid) {
+        setSelectedProvider('');
+      }
+    }
+  }, [aiProviders, selectedProvider]);
 
   const handleAnalyze = useCallback(async () => {
     setIsLoading(true);
@@ -85,11 +83,12 @@ const AILogAnalysis: React.FC = () => {
         logsToAnalyze = manualInput;
       }
 
-      const result = await apiService.post<AILogAnalysisResult>('/api/analyze-logs', {
-        logs: logsToAnalyze,
-        provider,
-        ollamaUrl: provider === 'ollama' ? ollamaUrl : undefined,
-      });
+      const payload: AnalyzeLogsRequest = { logs: logsToAnalyze };
+      if (selectedProvider) {
+        payload.provider = selectedProvider;
+      }
+
+      const result = await apiService.post<AILogAnalysisResult>('/api/analyze-logs', payload);
 
       // Helper function to convert items to strings
       const normalizeArray = (arr?: unknown[]): string[] => {
@@ -134,7 +133,7 @@ const AILogAnalysis: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [analysisMode, manualInput, provider, ollamaUrl, logLimit]);
+  }, [analysisMode, manualInput, logLimit, selectedProvider]);
 
   return (
     <div className="bg-gray-800 p-6 rounded-lg border border-gray-700">
@@ -152,40 +151,31 @@ const AILogAnalysis: React.FC = () => {
       </div>
 
       <div className="bg-gray-700/50 p-4 rounded-lg mb-6 space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label
-              htmlFor="provider-select"
-              className="block text-sm font-medium text-gray-300 mb-2"
-            >
-              AI Provider
-            </label>
-            <select
-              id="provider-select"
-              value={provider}
-              onChange={(e) => setProvider(e.target.value === 'gemini' ? 'gemini' : 'ollama')}
-              className="w-full bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-gray-200 focus:ring-primary focus:border-primary"
-            >
-              <option value="ollama">Ollama (Local)</option>
-              <option value="gemini">Gemini API</option>
-            </select>
-            <p className="text-xs text-gray-500 mt-1">Gemini provides more detailed analysis</p>
-          </div>
-          {provider === 'ollama' && (
-            <div>
-              <label htmlFor="ollamaUrl" className="block text-sm font-medium text-gray-300 mb-2">
-                Ollama Server URL
-              </label>
-              <input
-                type="text"
-                id="ollamaUrl"
-                value={ollamaUrl}
-                onChange={(e) => setOllamaUrl(e.target.value)}
-                className="w-full bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-gray-200 focus:ring-primary focus:border-primary"
-                placeholder="e.g., http://localhost:11434"
-              />
-            </div>
-          )}
+        <div>
+          <label className="block text-sm font-medium text-gray-300 mb-2" htmlFor="aiProvider">
+            AI Provider
+          </label>
+          <select
+            id="aiProvider"
+            value={selectedProvider}
+            onChange={(e) => setSelectedProvider(e.target.value as AIProvider | '')}
+            className="w-full bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-gray-200 focus:ring-primary focus:border-primary"
+          >
+            <option value="">Auto (best available)</option>
+            {availableProviders.map((provider) => (
+              <option
+                key={provider.provider}
+                value={provider.provider}
+                disabled={!provider.healthy}
+              >
+                {provider.provider}
+                {provider.healthy ? '' : ' (unhealthy)'}
+              </option>
+            ))}
+          </select>
+          <p className="text-xs text-gray-500 mt-1">
+            Providers are sourced from the backend health check.
+          </p>
         </div>
 
         <fieldset>
@@ -444,9 +434,7 @@ const AILogAnalysis: React.FC = () => {
       {!analysisResult && !isLoading && !error && (
         <div className="text-center py-12 text-gray-500">
           <SparklesIcon className="w-16 h-16 mx-auto mb-4 text-gray-600" />
-          <p className="text-lg">
-            Configure your AI provider and click &quot;Analyze Now&quot; to get started.
-          </p>
+          <p className="text-lg">Click &quot;Analyze Now&quot; to get AI-powered insights.</p>
           <p className="text-sm mt-2">
             The AI will provide detailed insights about your mail server logs.
           </p>

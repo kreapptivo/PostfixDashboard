@@ -64,13 +64,13 @@ const config = {
     dashboardPassword: process.env.DASHBOARD_PASSWORD,
   },
   ai: {
-    provider: process.env.AI_PROVIDER || 'ollama',
+    provider: (process.env.AI_PROVIDER || '').toLowerCase(),
     gemini: {
       apiKey: process.env.GEMINI_API_KEY || '',
       model: process.env.GEMINI_MODEL || 'gemini-2.0-flash-exp',
     },
     ollama: {
-      baseUrl: process.env.OLLAMA_API_BASE_URL || 'http://localhost:11434',
+      baseUrl: process.env.OLLAMA_API_BASE_URL || '',
       model: process.env.OLLAMA_MODEL || 'llama3.2:latest',
     },
     analysis: {
@@ -90,6 +90,22 @@ const logger = {
     config.server.logLevel === 'debug' && console.log('[DEBUG]', new Date().toISOString(), ...args),
 };
 
+// AI Providers: allow multiple configured providers
+const aiProviders = ['gemini', 'ollama'];
+
+// Track initialized clients
+const aiClients = {
+  gemini: null,
+};
+
+// AI Health State per provider
+const aiHealthState = {
+  providers: {
+    gemini: { configured: false, healthy: true, lastCheck: null, error: null },
+    ollama: { configured: false, healthy: true, lastCheck: null, error: null },
+  },
+};
+
 // Request logging middleware
 if (config.server.enableRequestLogging) {
   app.use((req, res, next) => {
@@ -103,11 +119,52 @@ if (config.server.enableRequestLogging) {
 }
 
 // Gemini AI Setup
-let ai;
-if (config.ai.gemini.apiKey && config.ai.gemini.apiKey !== 'YOUR_GEMINI_API_KEY_HERE') {
-  ai = new GoogleGenAI({ apiKey: config.ai.gemini.apiKey });
-  logger.info('Gemini AI initialized successfully');
+function initAIClients() {
+  let configuredProvider = '';
+  if (config.ai.provider && aiProviders.includes(config.ai.provider)) {
+    configuredProvider = config.ai.provider;
+  } else if (config.ai.provider) {
+    logger.warn(`Invalid AI_PROVIDER '${config.ai.provider}' specified. Falling back to auto.`);
+  }
+
+  const hasGemini = !!(
+    config.ai.gemini.apiKey &&
+    config.ai.gemini.apiKey !== 'YOUR_GEMINI_API_KEY_HERE' &&
+    config.ai.gemini.apiKey !== 'your-gemini-api-key'
+  );
+
+  const hasOllama = !!config.ai.ollama.baseUrl;
+
+  // Priority: use configured AI_PROVIDER first (if valid), then others that are available
+  const priority = [];
+  if (configuredProvider === 'ollama' && hasOllama) {
+    priority.push('ollama');
+  }
+  if (configuredProvider === 'gemini' && hasGemini) {
+    priority.push('gemini');
+  }
+  if (hasOllama && !priority.includes('ollama')) priority.push('ollama');
+  if (hasGemini && !priority.includes('gemini')) priority.push('gemini');
+
+  aiHealthState.priority = priority;
+
+  if (hasGemini) {
+    aiClients.gemini = new GoogleGenAI({ apiKey: config.ai.gemini.apiKey });
+    aiHealthState.providers.gemini.configured = true;
+    logger.info('Gemini AI configured');
+  }
+
+  if (hasOllama) {
+    aiHealthState.providers.ollama.configured = true;
+    logger.info('Ollama AI configured');
+  }
+
+  if (priority.length === 0) {
+    logger.info('No AI provider configured. AI features will be disabled.');
+  }
 }
+
+initAIClients();
 
 // --- CACHING ---
 let logCache = {
@@ -119,6 +176,74 @@ let logCache = {
 
 // Promisify zlib.gunzip for async/await
 const gunzip = promisify(zlib.gunzip);
+
+// AI Health Check Function (per provider)
+async function checkAIHealth() {
+  const nowIso = new Date().toISOString();
+
+  // If no providers configured, nothing to check
+  const configuredAny = aiProviders.some((p) => aiHealthState.providers[p].configured);
+  if (!configuredAny) return;
+
+  // Gemini health check
+  if (aiHealthState.providers.gemini.configured) {
+    try {
+      if (!aiClients.gemini) {
+        throw new Error('Gemini client not initialized');
+      }
+      // Lightweight validation: attempt to access models list with a tiny page size
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 5000);
+      await aiClients.gemini.models.list({ pageSize: 1, abortSignal: controller.signal });
+      clearTimeout(timeout);
+
+      aiHealthState.providers.gemini.healthy = true;
+      aiHealthState.providers.gemini.error = null;
+    } catch (error) {
+      aiHealthState.providers.gemini.healthy = false;
+      aiHealthState.providers.gemini.error = `Gemini unreachable: ${error.message}`;
+      logger.warn(`Gemini health check failed: ${error.message}`);
+    }
+    aiHealthState.providers.gemini.lastCheck = nowIso;
+  }
+
+  // Ollama health check
+  if (aiHealthState.providers.ollama.configured) {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 5000);
+      const response = await fetch(`${config.ai.ollama.baseUrl}/api/tags`, {
+        method: 'GET',
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+
+      if (!response.ok) {
+        throw new Error(`Ollama server returned status ${response.status}`);
+      }
+
+      aiHealthState.providers.ollama.healthy = true;
+      aiHealthState.providers.ollama.error = null;
+    } catch (error) {
+      aiHealthState.providers.ollama.healthy = false;
+      aiHealthState.providers.ollama.error = `Ollama unreachable: ${error.message}`;
+      logger.warn(`Ollama health check failed: ${error.message}`);
+    }
+    aiHealthState.providers.ollama.lastCheck = nowIso;
+  }
+}
+
+// Perform initial AI health check
+checkAIHealth().catch((err) => {
+  logger.error('Initial AI health check failed:', err);
+});
+
+// Regular AI health check every 60 seconds (only if any AI is configured)
+setInterval(() => {
+  checkAIHealth().catch((err) => {
+    logger.error('Periodic AI health check failed:', err);
+  });
+}, 60000);
 
 // --- AUTH UTILITIES ---
 
@@ -961,23 +1086,57 @@ logger.info('Analytics endpoints initialized successfully');
 // ============================================
 
 app.post('/api/analyze-logs', authenticate, async (req, res) => {
-  const { logs, provider, ollamaUrl } = req.body;
+  const { logs, provider } = req.body;
 
   if (!logs || typeof logs !== 'string') {
     return res.status(400).json({ error: 'Log data is required.' });
   }
 
-  const aiProvider = provider || config.ai.provider;
+  // Determine available providers based on health state
+  const availableProviders = aiProviders
+    .filter((p) => aiHealthState.providers[p].configured)
+    .filter((p) => aiHealthState.providers[p].healthy);
 
-  if (aiProvider === 'gemini') {
-    if (!ai) {
-      return res.status(400).json({
-        error:
-          'Gemini API key is not configured on the server. Please set GEMINI_API_KEY in the .env file.',
-      });
+  if (availableProviders.length === 0) {
+    // If none healthy but some configured, return degraded info
+    const configuredAny = aiProviders.some((p) => aiHealthState.providers[p].configured);
+    if (configuredAny) {
+      const errors = aiProviders
+        .filter((p) => aiHealthState.providers[p].configured)
+        .map((p) => aiHealthState.providers[p].error)
+        .filter(Boolean);
+      return res.status(503).json({ error: errors[0] || 'AI providers are unavailable.' });
     }
+    return res.status(503).json({ error: 'No AI provider is configured on the server.' });
+  }
+
+  // Build priority list: requested provider first (if healthy), then configured priority, then other healthy providers
+  const priority = [];
+  if (provider && availableProviders.includes(provider)) {
+    priority.push(provider);
+  }
+  // Append configured priority order
+  if (Array.isArray(aiHealthState.priority)) {
+    aiHealthState.priority.forEach((p) => {
+      if (availableProviders.includes(p) && !priority.includes(p)) {
+        priority.push(p);
+      }
+    });
+  }
+  // Append any other healthy providers
+  availableProviders.forEach((p) => {
+    if (!priority.includes(p)) priority.push(p);
+  });
+
+  let lastError = null;
+
+  for (const aiProvider of priority) {
     try {
-      const prompt = `You are an expert Postfix mail server administrator and security analyst with deep knowledge of email infrastructure, SMTP protocols, and mail server security.
+      if (aiProvider === 'gemini') {
+        if (!aiClients.gemini) {
+          throw new Error('Gemini client not initialized.');
+        }
+        const prompt = `You are an expert Postfix mail server administrator and security analyst with deep knowledge of email infrastructure, SMTP protocols, and mail server security.
 
 Analyze the following Postfix mail server logs in detail:
 
@@ -989,29 +1148,29 @@ Provide a comprehensive analysis in JSON format with the following structure:
   "summary": "A detailed 3-5 paragraph executive summary covering: overall mail server health, mail flow patterns, delivery success rates, any concerning trends, and recommendations for improvement.",
   
   "anomalies": [
-    "List specific unusual patterns such as: sudden spikes in mail volume, unusual sender/recipient patterns, atypical delivery times, connection patterns from unexpected sources, deviations from normal behavior, rate limiting triggers, etc. Be specific with examples from the logs."
+  "List specific unusual patterns such as: sudden spikes in mail volume, unusual sender/recipient patterns, atypical delivery times, connection patterns from unexpected sources, deviations from normal behavior, rate limiting triggers, etc. Be specific with examples from the logs."
   ],
   
   "threats": [
-    "List potential security threats including: relay access attempts, authentication failures, spam patterns, suspicious sender domains, potential brute force attacks, open relay attempts, malformed message patterns, connections from blacklisted IPs, etc. Include specific log entries as evidence."
+  "List potential security threats including: relay access attempts, authentication failures, spam patterns, suspicious sender domains, potential brute force attacks, open relay attempts, malformed message patterns, connections from blacklisted IPs, etc. Include specific log entries as evidence."
   ],
   
   "errors": [
-    "List configuration and operational errors such as: DNS lookup failures, connection timeouts, TLS/SSL certificate issues, queue management problems, disk space warnings, delivery failures, bounce patterns, temporary vs permanent failures, specific SMTP error codes encountered, etc."
+  "List configuration and operational errors such as: DNS lookup failures, connection timeouts, TLS/SSL certificate issues, queue management problems, disk space warnings, delivery failures, bounce patterns, temporary vs permanent failures, specific SMTP error codes encountered, etc."
   ],
   
   "statistics": {
-    "totalMessages": "number of messages processed",
-    "successRate": "percentage of successfully delivered messages",
-    "bounceRate": "percentage of bounced messages",
-    "deferredRate": "percentage of deferred messages",
-    "topSenderDomains": ["list of most active sender domains"],
-    "topRecipientDomains": ["list of most active recipient domains"],
-    "peakActivityTime": "time period with highest activity"
+  "totalMessages": "number of messages processed",
+  "successRate": "percentage of successfully delivered messages",
+  "bounceRate": "percentage of bounced messages",
+  "deferredRate": "percentage of deferred messages",
+  "topSenderDomains": ["list of most active sender domains"],
+  "topRecipientDomains": ["list of most active recipient domains"],
+  "peakActivityTime": "time period with highest activity"
   },
   
   "recommendations": [
-    "Provide actionable recommendations such as: configuration changes needed, security improvements, performance optimizations, monitoring enhancements, policy adjustments, SPF/DKIM/DMARC improvements, queue management strategies, etc."
+  "Provide actionable recommendations such as: configuration changes needed, security improvements, performance optimizations, monitoring enhancements, policy adjustments, SPF/DKIM/DMARC improvements, queue management strategies, etc."
   ]
 }
 
@@ -1023,79 +1182,76 @@ Focus on:
 - Provide context for technical terms
 - Prioritize findings by severity and impact`;
 
-      const response = await ai.models.generateContent({
-        model: config.ai.gemini.model,
-        contents: prompt,
-        config: {
-          responseMimeType: 'application/json',
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              summary: { type: Type.STRING },
-              anomalies: { type: Type.ARRAY, items: { type: Type.STRING } },
-              threats: { type: Type.ARRAY, items: { type: Type.STRING } },
-              errors: { type: Type.ARRAY, items: { type: Type.STRING } },
-              statistics: {
-                type: Type.OBJECT,
-                properties: {
-                  totalMessages: { type: Type.STRING },
-                  successRate: { type: Type.STRING },
-                  bounceRate: { type: Type.STRING },
-                  deferredRate: { type: Type.STRING },
-                  topSenderDomains: { type: Type.ARRAY, items: { type: Type.STRING } },
-                  topRecipientDomains: { type: Type.ARRAY, items: { type: Type.STRING } },
-                  peakActivityTime: { type: Type.STRING },
+        const response = await aiClients.gemini.models.generateContent({
+          model: config.ai.gemini.model,
+          contents: prompt,
+          config: {
+            responseMimeType: 'application/json',
+            responseSchema: {
+              type: Type.OBJECT,
+              properties: {
+                summary: { type: Type.STRING },
+                anomalies: { type: Type.ARRAY, items: { type: Type.STRING } },
+                threats: { type: Type.ARRAY, items: { type: Type.STRING } },
+                errors: { type: Type.ARRAY, items: { type: Type.STRING } },
+                statistics: {
+                  type: Type.OBJECT,
+                  properties: {
+                    totalMessages: { type: Type.STRING },
+                    successRate: { type: Type.STRING },
+                    bounceRate: { type: Type.STRING },
+                    deferredRate: { type: Type.STRING },
+                    topSenderDomains: { type: Type.ARRAY, items: { type: Type.STRING } },
+                    topRecipientDomains: { type: Type.ARRAY, items: { type: Type.STRING } },
+                    peakActivityTime: { type: Type.STRING },
+                  },
                 },
+                recommendations: { type: Type.ARRAY, items: { type: Type.STRING } },
               },
-              recommendations: { type: Type.ARRAY, items: { type: Type.STRING } },
+              required: [
+                'summary',
+                'anomalies',
+                'threats',
+                'errors',
+                'statistics',
+                'recommendations',
+              ],
             },
-            required: [
-              'summary',
-              'anomalies',
-              'threats',
-              'errors',
-              'statistics',
-              'recommendations',
-            ],
           },
-        },
-      });
-
-      const jsonText = response.text.trim();
-      const parsedResponse = JSON.parse(jsonText);
-
-      const normalizeArray = (arr) => {
-        if (!Array.isArray(arr)) return [];
-        return arr.map((item) => {
-          if (typeof item === 'string') return item;
-          if (typeof item === 'object' && item !== null) {
-            return item.description || item.text || item.message || JSON.stringify(item);
-          }
-          return String(item);
         });
-      };
 
-      const normalizedResponse = {
-        ...parsedResponse,
-        anomalies: normalizeArray(parsedResponse.anomalies),
-        threats: normalizeArray(parsedResponse.threats),
-        errors: normalizeArray(parsedResponse.errors),
-        recommendations: normalizeArray(parsedResponse.recommendations),
-      };
+        const jsonText = response.text.trim();
+        const parsedResponse = JSON.parse(jsonText);
 
-      logger.info('Gemini AI analysis completed successfully');
-      res.json(normalizedResponse);
-    } catch (error) {
-      logger.error('Gemini API Error:', error);
-      res.status(500).json({ error: `Failed to get analysis from Gemini. ${error.message || ''}` });
-    }
-  } else if (aiProvider === 'ollama') {
-    const urlToUse = ollamaUrl || config.ai.ollama.baseUrl;
-    if (!urlToUse) {
-      return res.status(400).json({ error: 'Ollama server URL is not configured.' });
-    }
-    try {
-      const prompt = `You are an expert Postfix mail server administrator and security analyst. Analyze these Postfix mail logs and provide a detailed JSON response.
+        const normalizeArray = (arr) => {
+          if (!Array.isArray(arr)) return [];
+          return arr.map((item) => {
+            if (typeof item === 'string') return item;
+            if (typeof item === 'object' && item !== null) {
+              return item.description || item.text || item.message || JSON.stringify(item);
+            }
+            return String(item);
+          });
+        };
+
+        const normalizedResponse = {
+          ...parsedResponse,
+          anomalies: normalizeArray(parsedResponse.anomalies),
+          threats: normalizeArray(parsedResponse.threats),
+          errors: normalizeArray(parsedResponse.errors),
+          recommendations: normalizeArray(parsedResponse.recommendations),
+        };
+
+        logger.info('Gemini AI analysis completed successfully');
+        return res.json(normalizedResponse);
+      }
+
+      if (aiProvider === 'ollama') {
+        const urlToUse = config.ai.ollama.baseUrl;
+        if (!urlToUse) {
+          throw new Error('Ollama server URL is not configured.');
+        }
+        const prompt = `You are an expert Postfix mail server administrator and security analyst. Analyze these Postfix mail logs and provide a detailed JSON response.
 
 Logs to analyze:
 ${logs}
@@ -1107,82 +1263,84 @@ Provide a comprehensive JSON analysis with this exact structure:
   "threats": ["List potential security threats with specific evidence from logs"],
   "errors": ["List configuration and operational errors with specific SMTP codes and details"],
   "statistics": {
-    "totalMessages": "count",
-    "successRate": "percentage",
-    "bounceRate": "percentage",
-    "deferredRate": "percentage",
-    "topSenderDomains": ["domain list"],
-    "topRecipientDomains": ["domain list"],
-    "peakActivityTime": "time period"
+  "totalMessages": "count",
+  "successRate": "percentage",
+  "bounceRate": "percentage",
+  "deferredRate": "percentage",
+  "topSenderDomains": ["domain list"],
+  "topRecipientDomains": ["domain list"],
+  "peakActivityTime": "time period"
   },
   "recommendations": ["List actionable improvements"]
 }
 
 Be specific, cite log entries, identify patterns, and prioritize by severity. Return ONLY valid JSON.`;
 
-      const ollamaResponse = await fetch(`${urlToUse}/api/generate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: config.ai.ollama.model,
-          prompt: prompt,
-          format: 'json',
-          stream: false,
-          options: {
-            temperature: 0.7,
-            top_p: 0.9,
-            num_predict: 2000,
-          },
-        }),
-      });
-
-      if (!ollamaResponse.ok) {
-        const errorBody = await ollamaResponse.text();
-        throw new Error(`Ollama server returned an error: ${ollamaResponse.status} ${errorBody}`);
-      }
-
-      const ollamaData = await ollamaResponse.json();
-      const parsedResponse = JSON.parse(ollamaData.response);
-
-      const normalizeArray = (arr) => {
-        if (!Array.isArray(arr)) return [];
-        return arr.map((item) => {
-          if (typeof item === 'string') return item;
-          if (typeof item === 'object' && item !== null) {
-            return item.description || item.text || item.message || JSON.stringify(item);
-          }
-          return String(item);
+        const ollamaResponse = await fetch(`${urlToUse}/api/generate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: config.ai.ollama.model,
+            prompt: prompt,
+            format: 'json',
+            stream: false,
+            options: {
+              temperature: 0.7,
+              top_p: 0.9,
+              num_predict: 2000,
+            },
+          }),
         });
-      };
 
-      const validatedResponse = {
-        summary: parsedResponse.summary || 'No summary provided',
-        anomalies: normalizeArray(parsedResponse.anomalies),
-        threats: normalizeArray(parsedResponse.threats),
-        errors: normalizeArray(parsedResponse.errors),
-        statistics: parsedResponse.statistics || {
-          totalMessages: 'N/A',
-          successRate: 'N/A',
-          bounceRate: 'N/A',
-          deferredRate: 'N/A',
-          topSenderDomains: [],
-          topRecipientDomains: [],
-          peakActivityTime: 'N/A',
-        },
-        recommendations: normalizeArray(parsedResponse.recommendations),
-      };
+        if (!ollamaResponse.ok) {
+          const errorBody = await ollamaResponse.text();
+          throw new Error(`Ollama server returned an error: ${ollamaResponse.status} ${errorBody}`);
+        }
 
-      logger.info('Ollama AI analysis completed successfully');
-      res.json(validatedResponse);
-    } catch (error) {
-      logger.error('Ollama Error:', error);
-      res.status(500).json({
-        error: `Failed to get analysis from Ollama. Check if the server is running and accessible. ${error.message || ''}`,
-      });
+        const ollamaData = await ollamaResponse.json();
+        const parsedResponse = JSON.parse(ollamaData.response);
+
+        const normalizeArray = (arr) => {
+          if (!Array.isArray(arr)) return [];
+          return arr.map((item) => {
+            if (typeof item === 'string') return item;
+            if (typeof item === 'object' && item !== null) {
+              return item.description || item.text || item.message || JSON.stringify(item);
+            }
+            return String(item);
+          });
+        };
+
+        const validatedResponse = {
+          summary: parsedResponse.summary || 'No summary provided',
+          anomalies: normalizeArray(parsedResponse.anomalies),
+          threats: normalizeArray(parsedResponse.threats),
+          errors: normalizeArray(parsedResponse.errors),
+          statistics: parsedResponse.statistics || {
+            totalMessages: 'N/A',
+            successRate: 'N/A',
+            bounceRate: 'N/A',
+            deferredRate: 'N/A',
+            topSenderDomains: [],
+            topRecipientDomains: [],
+            peakActivityTime: 'N/A',
+          },
+          recommendations: normalizeArray(parsedResponse.recommendations),
+        };
+
+        logger.info('Ollama AI analysis completed successfully');
+        return res.json(validatedResponse);
+      }
+    } catch (err) {
+      lastError = err;
+      logger.warn(`AI provider ${provider || 'auto'} failed on ${aiProvider}: ${err.message}`);
+      // try next provider
     }
-  } else {
-    res.status(400).json({ error: 'Invalid AI provider specified.' });
   }
+
+  return res
+    .status(503)
+    .json({ error: lastError?.message || 'All AI providers failed. Please try again later.' });
 });
 
 /**
@@ -1196,19 +1354,39 @@ Be specific, cite log entries, identify patterns, and prioritize by severity. Re
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
+  const anyConfigured = aiProviders.some((p) => aiHealthState.providers[p].configured);
+  const anyUnhealthy = aiProviders.some(
+    (p) => aiHealthState.providers[p].configured && !aiHealthState.providers[p].healthy,
+  );
+  const overallHealthy = anyConfigured ? !anyUnhealthy : true;
+
   /** @type {HealthResponse} */
-  const payload = {
-    status: 'ok',
+  const response = {
+    status: overallHealthy ? 'ok' : 'degraded',
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
     version: appVersion,
-    ai: {
-      gemini: !!ai,
-      ollama: config.ai.ollama.baseUrl,
-    },
   };
 
-  res.json(payload);
+  if (anyConfigured) {
+    response.ai = {
+      providers: aiProviders
+        .filter((p) => aiHealthState.providers[p].configured)
+        .map((p) => ({
+          provider: p,
+          healthy: aiHealthState.providers[p].healthy,
+          lastCheck: aiHealthState.providers[p].lastCheck,
+          // Only include non-sensitive error message
+          ...(aiHealthState.providers[p].healthy
+            ? {}
+            : { error: aiHealthState.providers[p].error }),
+        })),
+      healthy: overallHealthy,
+    };
+  }
+
+  const statusCode = overallHealthy ? 200 : 503;
+  res.status(statusCode).json(response);
 });
 
 // Start server only when executed directly (not when required in tests)
