@@ -50,13 +50,16 @@ const AILogAnalysis: React.FC<AILogAnalysisProps> = ({ aiProviders = [] }) => {
   useEffect(() => {
     setAvailableProviders(aiProviders);
 
-    if (selectedProvider) {
-      const stillValid = aiProviders.find((p) => p.provider === selectedProvider && p.healthy);
-      if (!stillValid) {
-        setSelectedProvider('');
+    setSelectedProvider((current) => {
+      if (current) {
+        const stillValid = aiProviders.find((p) => p.provider === current && p.healthy);
+        if (!stillValid) {
+          return '';
+        }
       }
-    }
-  }, [aiProviders, selectedProvider]);
+      return current;
+    });
+  }, [aiProviders]);
 
   const handleAnalyze = useCallback(async () => {
     setIsLoading(true);
