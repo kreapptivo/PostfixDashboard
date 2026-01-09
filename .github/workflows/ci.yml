@@ -46,17 +46,13 @@ jobs:
         working-directory: backend
         run: npm run format
       
-      - name: Install c8 for coverage
-        working-directory: backend
-        run: npm install --save-dev c8
-      
       - name: Check for syntax errors
         working-directory: backend
         run: node -c server.js
       
       - name: Generate coverage report
         working-directory: backend
-        run: npx c8 --reporter=lcov --reporter=text npm test
+        run: npm run test:ci
       
       - name: Test backend startup
         working-directory: backend
