@@ -101,8 +101,8 @@ const aiClients = {
 // AI Health State per provider
 const aiHealthState = {
   providers: {
-    gemini: { configured: false, healthy: true, lastCheck: null, error: null },
-    ollama: { configured: false, healthy: true, lastCheck: null, error: null },
+    gemini: { configured: false, healthy: undefined, lastCheck: null, error: null },
+    ollama: { configured: false, healthy: undefined, lastCheck: null, error: null },
   },
 };
 
@@ -233,13 +233,31 @@ async function checkAIHealth() {
   }
 }
 
-// Perform initial AI health check
-checkAIHealth().catch((err) => {
-  logger.error('Initial AI health check failed:', err);
+// Store health check interval reference for cleanup
+let _healthCheckInterval = null;
+
+// Promise that resolves when first health check completes
+let firstCheckPromise = null;
+let firstCheckResolve = null;
+
+firstCheckPromise = new Promise((resolve) => {
+  firstCheckResolve = resolve;
 });
 
+// Perform initial AI health check
+checkAIHealth()
+  .catch((err) => {
+    logger.error('Initial AI health check failed:', err);
+  })
+  .finally(() => {
+    if (firstCheckResolve) {
+      firstCheckResolve();
+      firstCheckResolve = null;
+    }
+  });
+
 // Regular AI health check every 60 seconds (only if any AI is configured)
-setInterval(() => {
+_healthCheckInterval = setInterval(() => {
   checkAIHealth().catch((err) => {
     logger.error('Periodic AI health check failed:', err);
   });
@@ -1353,7 +1371,12 @@ Be specific, cite log entries, identify patterns, and prioritize by severity. Re
  */
 
 // Health check endpoint
-app.get('/api/health', (req, res) => {
+app.get('/api/health', async (req, res) => {
+  // Wait for first health check to complete
+  if (firstCheckPromise) {
+    await firstCheckPromise;
+  }
+
   const anyConfigured = aiProviders.some((p) => aiHealthState.providers[p].configured);
   const anyUnhealthy = aiProviders.some(
     (p) => aiHealthState.providers[p].configured && !aiHealthState.providers[p].healthy,
@@ -1389,14 +1412,34 @@ app.get('/api/health', (req, res) => {
   res.status(statusCode).json(response);
 });
 
-// Start server only when executed directly (not when required in tests)
-if (require.main === module) {
-  app.listen(PORT, () => {
-    logger.info(`Backend server is running on http://localhost:${PORT}`);
-    logger.info(`Token expiry: ${config.auth.tokenExpiryHours} hours`);
-    logger.info(`AI Provider: ${config.ai.provider}`);
-    logger.info(`Log Level: ${config.server.logLevel}`);
-  });
-}
-
+// Export the configured Express app
 module.exports = app;
+
+// Start the server
+const server = app.listen(PORT, () => {
+  logger.info(`Backend server is running on http://localhost:${PORT}`);
+  logger.info(`Token expiry: ${config.auth.tokenExpiryHours} hours`);
+  logger.info(`AI Provider: ${config.ai.provider}`);
+  logger.info(`Log Level: ${config.server.logLevel}`);
+});
+
+// Cleanup when server closes
+server.on('close', () => {
+  if (_healthCheckInterval) {
+    clearInterval(_healthCheckInterval);
+    _healthCheckInterval = null;
+  }
+});
+
+// Close server gracefully on process termination
+process.on('SIGTERM', () => {
+  logger.info('SIGTERM received, closing server...');
+  server.close();
+});
+
+process.on('SIGINT', () => {
+  logger.info('SIGINT received, closing server...');
+  server.close();
+});
+
+module.exports.server = server;
