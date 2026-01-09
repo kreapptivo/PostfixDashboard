@@ -15,7 +15,7 @@ import {
   ShieldCheckIcon,
   SparklesIcon,
 } from './icons/IconComponents';
-import { MailVolumeData, MailStats, MailStatus } from '../types';
+import { MailVolumeData, MailStats, MailStatus, HealthResponse, AIProviderHealth } from '../types';
 import apiService, { ApiError } from '../services/apiService';
 import {
   getLastNDaysRange,
@@ -48,6 +48,15 @@ interface DashboardProps {
 type View = 'dashboard' | 'logs' | 'analysis' | 'analytics' | 'networks';
 type ChartType = 'default' | 'bar' | 'line' | 'area' | 'stacked' | 'composed' | 'radial';
 
+const hasAIProviderData = (data: unknown): data is HealthResponse => {
+  if (typeof data !== 'object' || data === null) {
+    return false;
+  }
+
+  const aiSection = (data as { ai?: { providers?: unknown } }).ai;
+  return Array.isArray(aiSection?.providers);
+};
+
 const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   const [activeView, setActiveView] = useState<View>('dashboard');
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -62,6 +71,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
   const [volumeData, setVolumeData] = useState<MailVolumeData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isAIAvailable, setIsAIAvailable] = useState(false);
+  const [aiProviders, setAIProviders] = useState<AIProviderHealth[]>([]);
 
   // Default to last 7 days
   const defaultRange = getLastNDaysRange(7);
@@ -113,6 +124,32 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
       void fetchData();
     }
   }, [activeView, fetchData]);
+
+  // Check AI availability on mount
+  useEffect(() => {
+    const checkAIAvailability = async () => {
+      try {
+        const health = await apiService.get<HealthResponse>('/api/health');
+        const providers = health.ai?.providers || [];
+        setAIProviders(providers);
+        setIsAIAvailable(providers.some((p) => p.healthy));
+      } catch (err) {
+        if (err instanceof ApiError) {
+          const providersFromError = hasAIProviderData(err.data)
+            ? (err.data.ai?.providers ?? [])
+            : [];
+
+          setAIProviders(providersFromError);
+          setIsAIAvailable(providersFromError.some((p) => p.healthy));
+        } else {
+          console.error('Failed to check AI availability:', err);
+          setIsAIAvailable(false);
+          setAIProviders([]);
+        }
+      }
+    };
+    void checkAIAvailability();
+  }, []);
 
   const handleFilterChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFilter((prev) => ({ ...prev, [e.target.name]: e.target.value }));
@@ -499,7 +536,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
       case 'logs':
         return <MailLogTable initialFilter={logFilter} />;
       case 'analysis':
-        return <AILogAnalysis />;
+        return <AILogAnalysis aiProviders={aiProviders} />;
       case 'analytics':
         return <Analytics />;
       case 'networks':
@@ -773,9 +810,16 @@ const Dashboard: React.FC<DashboardProps> = ({ onLogout }) => {
     <div className="flex h-screen bg-gray-900">
       <Sidebar
         activeView={activeView}
-        setActiveView={setActiveView}
+        setActiveView={(view: View) => {
+          // Prevent navigation to AI analysis if not available
+          if (view === 'analysis' && !isAIAvailable) {
+            return;
+          }
+          setActiveView(view);
+        }}
         isCollapsed={isCollapsed}
         setIsCollapsed={setIsCollapsed}
+        isAIAvailable={isAIAvailable}
       />
       <div className="flex-1 flex flex-col overflow-hidden">
         <Header onLogout={onLogout} />

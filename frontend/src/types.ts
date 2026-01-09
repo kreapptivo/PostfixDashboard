@@ -130,15 +130,28 @@ export interface AnalyticsSummary {
   };
 }
 
-export interface HealthAIStatus {
-  gemini: boolean;
-  ollama: string;
+// AI / Health types
+export type AIProvider = 'gemini' | 'ollama';
+
+export interface AIProviderHealth {
+  provider: AIProvider;
+  healthy: boolean;
+  lastCheck?: string;
+  error?: string;
 }
 
 export interface HealthResponse {
-  status: 'ok';
+  status: 'ok' | 'degraded';
   timestamp: string;
   uptime: number;
   version: string;
-  ai: HealthAIStatus;
+  ai?: {
+    providers: AIProviderHealth[];
+    healthy: boolean;
+  };
+}
+
+export interface AnalyzeLogsRequest {
+  logs: string;
+  provider?: AIProvider;
 }
