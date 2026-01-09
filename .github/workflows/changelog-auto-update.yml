@@ -2,8 +2,11 @@ name: Changelog validation
 
 on:
   pull_request:
-    branches: [ main ]
+    branches: [main]
     types: [opened, synchronize, reopened, ready_for_review, labeled]
+  pull_request_target:
+    branches: [main]
+    types: [labeled]
 
 permissions:
   contents: write
@@ -22,12 +25,12 @@ jobs:
           fetch-depth: 0
           ref: ${{ github.event.pull_request.head.ref }}
           repository: ${{ github.event.pull_request.head.repo.full_name }}
-    
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'      
+          node-version: "20"
+          cache: "npm"
 
       - name: Validate changelog
         run: npx kacl lint && echo "✅ Changelog validation passed"
@@ -45,7 +48,7 @@ jobs:
 
       - name: Install dependencies for commit parsing
         if: steps.manual_update.outputs.updated == 'false'
-        run: npm install --no-save conventional-commits-parser
+        run: npm install --no-save mentions-regex parse-commit-message
 
       - name: Parse commits and generate changelog entries
         if: steps.manual_update.outputs.updated == 'false'
@@ -60,33 +63,33 @@ jobs:
         with:
           script: |
             const preview = `${{ steps.generate_changelog.outputs.preview }}`;
-            
+
             const commentBody = `## 📋 Changelog Update Required
-            
+
             The CHANGELOG.md file has not been updated in this PR. Here are suggested entries based on your commits:
-            
+
             ${preview}
-            
+
             ### Options:
-            
+
             1. **Manual Update** (Recommended): Edit CHANGELOG.md yourself for better descriptions
             2. **Auto-Apply**: Add the label \`changelog-approved\` to automatically commit these entries
-            
+
             ---
             *This is an automated suggestion. Feel free to modify the entries as needed.*`;
-            
+
             // Check if comment already exists
             const { data: comments } = await github.rest.issues.listComments({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.issue.number,
             });
-            
+
             const botComment = comments.find(comment => 
               comment.user.type === 'Bot' && 
               comment.body.includes('📋 Changelog Update Required')
             );
-            
+
             if (botComment) {
               await github.rest.issues.updateComment({
                 owner: context.repo.owner,
@@ -127,8 +130,8 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
+          node-version: "20"
+          cache: "npm"
 
       - name: Configure Git
         run: |
@@ -161,6 +164,6 @@ jobs:
         if: steps.check_existing.outputs.needs_update == 'true'
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: 'docs(changelog): auto-update from conventional commits [skip ci]'
-          file_pattern: 'CHANGELOG.md'
+          commit_message: "docs(changelog): auto-update from conventional commits [skip ci]"
+          file_pattern: "CHANGELOG.md"
           branch: ${{ github.event.pull_request.head.ref }}
