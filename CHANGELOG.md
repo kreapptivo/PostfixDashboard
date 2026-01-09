@@ -7,7 +7,7 @@ See [Conventional Commits](https://conventionalcommits.org) for commit guideline
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## [Unreleased]
 ### Added
 - GitHub workflows for changelog updates and release management
 - CONTRIBUTING guidelines and project workflow documentation
@@ -32,7 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - changelog parsing for suggestion
 - add port 5173 to allowedOrigin for local dev tests
 
-## 2.2.0 - 2025-11-01
+## [2.2.0] - 2025-11-01
 ### Added
 - Advanced analytics with multiple chart types (bar, line, area, pie, radar)
 - Improved IP address tracking (local vs relay IPs)
@@ -51,7 +51,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Token expiration handling
 - Chart rendering issues on mobile devices
 
-## 2.1.0 - 2025-10-31
+## [2.1.0] - 2025-10-31
 ### Added
 - AI-powered log analysis with Gemini and Ollama support
 - Allowed networks management interface
@@ -66,7 +66,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Various bug fixes and improvements
 
-## 2.0.0 - 2025-10-24
+## [2.0.0] - 2025-10-24
 ### Added
 - Type safety across the entire application
 - Better error handling
@@ -79,7 +79,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Improved authentication system
 - Enhanced overall UI/UX
 
-## 1.0.0 - 2025-10-01
+## [1.0.0] - 2025-10-24
 ### Added
 - Initial release
 - Basic log viewing functionality

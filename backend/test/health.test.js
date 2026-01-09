@@ -1,113 +1,70 @@
-const { describe, it, afterEach } = require('node:test');
+const { describe, it, afterEach, beforeEach } = require('node:test');
 const assert = require('node:assert');
 const request = require('supertest');
 const { appVersion } = require('../version');
 
-// Clear environment variables that might come from .env file
-const envVarsToMock = [
-  'AI_PROVIDER',
-  'GEMINI_API_KEY',
-  'GEMINI_MODEL',
-  'OLLAMA_API_BASE_URL',
-  'OLLAMA_MODEL',
-  'POSTFIX_LOG_PATH',
-  'POSTFIX_CONFIG_PATH',
-  'TOKEN_SECRET',
-  'TOKEN_EXPIRY_HOURS',
-  'DASHBOARD_USER',
-  'DASHBOARD_PASSWORD',
-  'LOG_LEVEL',
-  'ENABLE_REQUEST_LOGGING',
-  'AI_ANALYSIS_MAX_LOGS',
-  'AI_ANALYSIS_DEFAULT_LOGS',
-  'AI_ANALYSIS_TIMEOUT',
-  'PORT',
-  'ALLOWED_ORIGINS',
-];
+// Mock environment variables for clean test state
+const mockEnv = (envVars = {}) => {
+  const envVarsToMock = [
+    'AI_PROVIDER',
+    'GEMINI_API_KEY',
+    'GEMINI_MODEL',
+    'OLLAMA_API_BASE_URL',
+    'OLLAMA_MODEL',
+    'POSTFIX_LOG_PATH',
+    'POSTFIX_CONFIG_PATH',
+    'TOKEN_SECRET',
+    'TOKEN_EXPIRY_HOURS',
+    'DASHBOARD_USER',
+    'DASHBOARD_PASSWORD',
+    'LOG_LEVEL',
+    'ENABLE_REQUEST_LOGGING',
+    'AI_ANALYSIS_MAX_LOGS',
+    'AI_ANALYSIS_DEFAULT_LOGS',
+    'AI_ANALYSIS_TIMEOUT',
+    'PORT',
+    'ALLOWED_ORIGINS',
+  ];
 
-let lastCleanup = Promise.resolve();
-
-const loadApp = async (envVars = {}) => {
-  // Wait for previous cleanup to complete before starting new server
-  await lastCleanup;
-
-  // Start with clean environment - remove all config-related variables
+  // Clear all config variables
   envVarsToMock.forEach((key) => {
     delete process.env[key];
   });
 
-  // Always prefer ephemeral port for tests unless explicitly provided
-  const mergedEnv = { PORT: '0', ...envVars };
-
   // Set only the provided environment variables
-  Object.entries(mergedEnv).forEach(([key, value]) => {
+  Object.entries(envVars).forEach(([key, value]) => {
     if (value === null || value === undefined) {
       delete process.env[key];
     } else {
       process.env[key] = value;
     }
   });
-
-  // Clear require cache BEFORE loading app
-  delete require.cache[require.resolve('../server')];
-
-  // Load the app - this starts the server immediately
-  const appModule = require('../server');
-  const server = appModule.server;
-
-  // Wait for the server to start listening
-  return new Promise((resolve) => {
-    if (server.listening) {
-      resolve({ app: appModule, server });
-    } else {
-      server.once('listening', () => {
-        resolve({ app: appModule, server });
-      });
-    }
-  });
 };
 
 let currentServer = null;
 
-const cleanup = async () => {
-  if (currentServer) {
-    // Close the server and wait for it to fully close
-    await new Promise((resolve) => {
-      // Destroy all active connections
-      if (currentServer.closeAllConnections) {
-        currentServer.closeAllConnections();
-      }
-
-      currentServer.close((_err) => {
-        // Ignore close errors
-        resolve();
-      });
-    });
-
-    currentServer = null;
-  }
-
-  // Clear all config-related variables
-  envVarsToMock.forEach((key) => {
-    delete process.env[key];
+describe('GET /api/health', () => {
+  beforeEach(() => {
+    // Clear the app module cache before each test to ensure fresh configuration
+    delete require.cache[require.resolve('../server')];
   });
 
-  // Clear require cache to ensure fresh server instance next time
-  delete require.cache[require.resolve('../server')];
-};
-
-describe('GET /api/health', () => {
   afterEach(async () => {
-    // Store the cleanup promise so the next test waits for it
-    lastCleanup = cleanup();
-    await lastCleanup;
+    // Stop the server after each test
+    if (currentServer) {
+      await new Promise((resolve) => {
+        currentServer.close(() => resolve());
+      });
+      currentServer = null;
+    }
   });
 
   it('returns ok status and metadata when no AI provider is configured', async () => {
-    const { app, server } = await loadApp({
-      // Empty config - no AI provider
-    });
+    mockEnv({});
 
+    const app = require('../server');
+    const { startServer } = require('../server');
+    const server = startServer();
     currentServer = server;
 
     const res = await request(app).get('/api/health');
@@ -126,11 +83,14 @@ describe('GET /api/health', () => {
   });
 
   it('includes ai property when Gemini AI provider is configured', async () => {
-    const { app, server } = await loadApp({
+    mockEnv({
       AI_PROVIDER: 'gemini',
       GEMINI_API_KEY: 'test-api-key-12345',
     });
 
+    const app = require('../server');
+    const { startServer } = require('../server');
+    const server = startServer();
     currentServer = server;
 
     const res = await request(app).get('/api/health');
@@ -153,11 +113,14 @@ describe('GET /api/health', () => {
   });
 
   it('includes ai property when Ollama AI provider is configured', async () => {
-    const { app, server } = await loadApp({
+    mockEnv({
       AI_PROVIDER: 'ollama',
       OLLAMA_API_BASE_URL: 'http://localhost:11434',
     });
 
+    const app = require('../server');
+    const { startServer } = require('../server');
+    const server = startServer();
     currentServer = server;
 
     const res = await request(app).get('/api/health');

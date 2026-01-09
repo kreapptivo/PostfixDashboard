@@ -93,7 +93,10 @@ const logger = {
 // AI Providers: allow multiple configured providers
 const aiProviders = ['gemini', 'ollama'];
 
-// Track initialized clients
+// Track initialized clients.
+// Note: Only Gemini requires a long-lived client instance here.
+// Ollama requests are made directly via HTTP (e.g., fetch) and do not
+// need to be stored in this map.
 const aiClients = {
   gemini: null,
 };
@@ -1412,34 +1415,44 @@ app.get('/api/health', async (req, res) => {
   res.status(statusCode).json(response);
 });
 
+// Factory function to start the server on demand
+function startServer() {
+  const server = app.listen(PORT, () => {
+    logger.info(`Backend server is running on http://localhost:${PORT}`);
+    logger.info(`Token expiry: ${config.auth.tokenExpiryHours} hours`);
+    logger.info(`AI Provider: ${config.ai.provider}`);
+    logger.info(`Log Level: ${config.server.logLevel}`);
+  });
+
+  // Cleanup when server closes
+  server.on('close', () => {
+    if (_healthCheckInterval) {
+      clearInterval(_healthCheckInterval);
+      _healthCheckInterval = null;
+    }
+  });
+
+  return server;
+}
+
 // Export the configured Express app
 module.exports = app;
 
-// Start the server
-const server = app.listen(PORT, () => {
-  logger.info(`Backend server is running on http://localhost:${PORT}`);
-  logger.info(`Token expiry: ${config.auth.tokenExpiryHours} hours`);
-  logger.info(`AI Provider: ${config.ai.provider}`);
-  logger.info(`Log Level: ${config.server.logLevel}`);
-});
+// Export the server factory function
+module.exports.startServer = startServer;
 
-// Cleanup when server closes
-server.on('close', () => {
-  if (_healthCheckInterval) {
-    clearInterval(_healthCheckInterval);
-    _healthCheckInterval = null;
-  }
-});
+// Start the server only if this module is run directly
+if (require.main === module) {
+  const server = startServer();
 
-// Close server gracefully on process termination
-process.on('SIGTERM', () => {
-  logger.info('SIGTERM received, closing server...');
-  server.close();
-});
+  // Close server gracefully on process termination
+  process.on('SIGTERM', () => {
+    logger.info('SIGTERM received, closing server...');
+    server.close();
+  });
 
-process.on('SIGINT', () => {
-  logger.info('SIGINT received, closing server...');
-  server.close();
-});
-
-module.exports.server = server;
+  process.on('SIGINT', () => {
+    logger.info('SIGINT received, closing server...');
+    server.close();
+  });
+}
