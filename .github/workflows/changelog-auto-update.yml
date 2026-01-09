@@ -119,12 +119,11 @@ jobs:
     if: github.event.action == 'labeled' && github.event.label.name == 'changelog-approved'
 
     steps:
-      - name: Checkout pull request
+      - name: Checkout base branch (main)
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: ${{ github.event.pull_request.head.ref }}
-          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: main
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Node.js
