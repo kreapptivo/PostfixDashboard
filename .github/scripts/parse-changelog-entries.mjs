@@ -129,20 +129,35 @@ function generatePreview(entries) {
 }
 
 function applyChangelog(entries) {
-  const categoryMap = {
-    added: 'kacl added',
-    changed: 'kacl changed',
-    deprecated: 'kacl deprecated',
-    removed: 'kacl removed',
-    fixed: 'kacl fixed',
-    security: 'kacl security',
-  };
-
+  console.info('::group::Applying changelog entries');
+  
+  let totalApplied = 0;
   for (const [category, categoryEntries] of Object.entries(entries)) {
+    if (categoryEntries.length === 0) {
+      console.warn(`[${category}] No entries to apply`);
+      continue;
+    }
+    
+    console.info(`[${category}] Processing ${categoryEntries.length} entries...`);
+    
     for (const entry of categoryEntries) {
-      execSync('npx', ['--yes', categoryMap[category], entry], { stdio: 'inherit' });
+      console.info(`  → Applying: "${entry}"`);
+      try {
+        // Properly escape the entry string for shell
+        const escapedEntry = entry.replace(/"/g, '\\"');
+        const command = `npx --yes kacl ${category} "${escapedEntry}"`;
+        console.debug(`     Command: ${command}`);
+        execSync(command, { stdio: 'inherit' });
+        totalApplied++;
+      } catch (error) {
+        console.error(`  ✗ ERROR: ${error.message}`);
+        throw error;
+      }
     }
   }
+  
+  console.info(`::endgroup::`);
+  console.info(`Total changelog entries applied: ${totalApplied}`);
 }
 
 // Main execution
