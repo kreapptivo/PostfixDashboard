@@ -45,7 +45,7 @@ jobs:
 
       - name: Install dependencies for commit parsing
         if: steps.manual_update.outputs.updated == 'false'
-        run: npm install --no-save conventional-commits-parser
+        run: npm install --no-save mentions-regex parse-commit-message
 
       - name: Parse commits and generate changelog entries
         if: steps.manual_update.outputs.updated == 'false'

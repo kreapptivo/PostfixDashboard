@@ -6,9 +6,9 @@
  */
 
 import { execSync } from 'child_process';
-import { parseCommits as parseConventionalCommits } from 'conventional-commits-parser';
+import { parse } from 'parse-commit-message';
 
-async function parseCommits() {
+function parseCommits() {
   // Get commits between base and head using %x00 (null byte) as delimiter
   const gitOutput = execSync(
     'git log origin/main..HEAD --format=%H%x00%s%x00%b%x00',
@@ -27,8 +27,10 @@ async function parseCommits() {
   }
 
   // Split by null byte and group into commits (3 parts each: hash, subject, body)
-  const parts = gitOutput.split('\0').filter(line => line.trim() !== '');
-  
+  // NOTE: Do NOT filter out empty strings - they represent empty commit bodies
+  // and filtering breaks the alignment between hash, subject, and body
+  const parts = gitOutput.split('\0');
+
   // Parse commits
   const entries = {
     added: [],
@@ -51,29 +53,37 @@ async function parseCommits() {
       continue;
     }
 
-    // Parse the commit using conventional-commits-parser
-    const parsed = await parseConventionalCommits([subject]);
-    const commit = parsed[0];
+    // Parse the commit message using parse-commit-message
+    let commit;
+    try {
+      const parsed = parse(subject);
+      commit = Array.isArray(parsed) ? parsed[0] : parsed;
+    } catch (error) {
+      console.warn(`Failed to parse commit ${hash}: ${error.message}`);
+      continue;
+    }
 
-    if (!commit) continue;
+    if (!commit || !commit.header || !commit.header.type) {
+      console.warn(`Could not determine type for: ${subject}`);
+      continue;
+    }
 
-    const scope = commit.scope ? ` (${commit.scope})` : '';
-    const description = commit.subject || subject;
-    const isBreaking = subject.includes('!:') || commit.notes?.some((n) => n.title === 'BREAKING CHANGE');
+    const { type, scope, subject: description } = commit.header;
+    const isBreaking = subject.includes('!:') || body.match(/BREAKING[\s-]CHANGE/);
 
-    const entry = `${description}${scope}${isBreaking ? ' **BREAKING CHANGE**' : ''}`;
+    const entry = `${description}${scope ? ` (${scope})` : ''}${isBreaking ? ' **BREAKING CHANGE**' : ''}`;
 
     // Categorize based on conventional commit type
-    if (commit.type === 'feat') {
+    if (type === 'feat') {
       entries.added.push(entry);
-    } else if (commit.type === 'fix') {
+    } else if (type === 'fix') {
       // Check if security-related
       if (body.match(/security|vulnerability|cve|sec-fix/i) || description.match(/security|vulnerability|cve/i)) {
         entries.security.push(entry);
       } else {
         entries.fixed.push(entry);
       }
-    } else if (commit.type === 'docs' || commit.type === 'refactor' || commit.type === 'perf' || commit.type === 'style') {
+    } else if (type === 'docs' || type === 'refactor' || type === 'perf' || type === 'style') {
       entries.changed.push(entry);
     }
 
@@ -138,30 +148,28 @@ function applyChangelog(entries) {
 // Main execution
 const mode = process.argv[2] || 'preview';
 
-(async () => {
-  try {
-    const entries = await parseCommits();
+try {
+  const entries = parseCommits();
 
-    if (mode === 'preview') {
-      const preview = generatePreview(entries);
-      const hasChanges = Object.values(entries).some((arr) => arr.length > 0);
+  if (mode === 'preview') {
+    const preview = generatePreview(entries);
+    const hasChanges = Object.values(entries).some((arr) => arr.length > 0);
 
-      // Output for human readability (to stderr, not captured by $GITHUB_OUTPUT)
-      console.error('::group::Changelog Entry Preview');
-      console.error(preview);
-      console.error('::endgroup::');
+    // Output for human readability (to stderr, not captured by $GITHUB_OUTPUT)
+    console.error('::group::Changelog Entry Preview');
+    console.error(preview);
+    console.error('::endgroup::');
 
-      // Output for GitHub Actions (to stdout, captured by $GITHUB_OUTPUT)
-      console.log(`has_changes=${hasChanges}`);
-      console.log(`preview<<EOF`);
-      console.log(preview);
-      console.log(`EOF`);
-      console.log(`entries_json=${JSON.stringify(entries)}`);
-    } else if (mode === 'apply') {
-      applyChangelog(entries);
-    }
-  } catch (error) {
-    console.error('Error parsing commits:', error.message);
-    process.exit(1);
+    // Output for GitHub Actions (to stdout, captured by $GITHUB_OUTPUT)
+    console.log(`has_changes=${hasChanges}`);
+    console.log(`preview<<EOF`);
+    console.log(preview);
+    console.log(`EOF`);
+    console.log(`entries_json=${JSON.stringify(entries)}`);
+  } else if (mode === 'apply') {
+    applyChangelog(entries);
   }
-})();
+} catch (error) {
+  console.error('Error parsing commits:', error.message);
+  process.exit(1);
+}
