@@ -5,7 +5,7 @@
  * Outputs JSON with entries categorized by type
  */
 
-import { execSync } from 'child_process';
+import { execSync, execFileSync } from 'child_process';
 import { parse } from 'parse-commit-message';
 
 function parseCommits() {
@@ -143,11 +143,17 @@ function applyChangelog(entries) {
     for (const entry of categoryEntries) {
       console.info(`  → Applying: "${entry}"`);
       try {
-        // Properly escape the entry string for shell
-        const escapedEntry = entry.replace(/"/g, '\\"');
-        const command = `npx --yes kacl ${category} "${escapedEntry}"`;
-        console.debug(`     Command: ${command}`);
-        execSync(command, { stdio: 'inherit' });
+        // Use execFileSync with argument array to avoid shell escaping issues
+        // On Windows, use cmd.exe to execute npx.cmd without needing shell option
+        if (process.platform === 'win32') {
+          execFileSync('cmd.exe', ['/d', '/s', '/c', 'npx', '--yes', 'kacl', category, entry], { 
+            stdio: 'inherit'
+          });
+        } else {
+          execFileSync('npx', ['--yes', 'kacl', category, entry], { 
+            stdio: 'inherit'
+          });
+        }
         totalApplied++;
       } catch (error) {
         console.error(`  ✗ ERROR: ${error.message}`);
