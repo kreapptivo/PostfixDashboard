@@ -318,14 +318,7 @@ postfix-dashboard/
 | `GEMINI_API_KEY` | - | Google Gemini API key |
 | `OLLAMA_API_BASE_URL` | http://localhost:11434 | Ollama server URL |
 
-### Frontend Configuration Options
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `VITE_API_TIMEOUT` | 30000 | API request timeout (ms) |
-| `VITE_APP_NAME` | Postfix Dashboard | Application name |
-
-### AI Provider Setup
+### AI Provider Setup (Backend)
 
 #### Option 1: Google Gemini (Cloud)
 1. Get API key from [Google AI Studio](https://makersuite.google.com/app/apikey)
@@ -337,6 +330,13 @@ postfix-dashboard/
 2. Pull a model: `ollama pull llama3.2`
 3. Start Ollama: `ollama serve`
 4. Set `AI_PROVIDER=ollama` in `.env`
+
+### Frontend Configuration Options
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `VITE_API_TIMEOUT` | 30000 | API request timeout (ms) |
+| `VITE_APP_NAME` | Postfix Dashboard | Application name |
 
 ## 💻 Usage
 
@@ -365,14 +365,15 @@ postfix-dashboard/
 - Export filtered logs to CSV
 
 #### AI Log Analysis
-1. Select AI provider (Gemini or Ollama)
-2. Configure Ollama URL if using local AI
-3. Choose analysis mode:
+
+**Note**: This feature requires AI configuration in the backend. If not configured, the menu option will be disabled.
+
+1. Choose analysis mode:
    - Recent logs (automatic fetch)
    - Manual input (paste custom logs)
-4. Set number of logs to analyze (25-200)
-5. Click "Analyze Now"
-6. Review:
+2. Set number of logs to analyze (25-200 for recent logs)
+3. Click "Analyze Now"
+4. Review:
    - Executive summary
    - Key statistics
    - Detected anomalies

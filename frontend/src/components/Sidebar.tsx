@@ -33,6 +33,7 @@ interface SidebarProps {
   setActiveView: (view: View) => void;
   isCollapsed: boolean;
   setIsCollapsed: (collapsed: boolean) => void;
+  isAIAvailable: boolean;
 }
 
 interface NavItemProps {
@@ -41,21 +42,39 @@ interface NavItemProps {
   isActive: boolean;
   onClick: () => void;
   isCollapsed: boolean;
+  isDisabled?: boolean;
 }
 
-const NavItem: React.FC<NavItemProps> = ({ icon, label, isActive, onClick, isCollapsed }) => {
+const NavItem: React.FC<NavItemProps> = ({
+  icon,
+  label,
+  isActive,
+  onClick,
+  isCollapsed,
+  isDisabled = false,
+}) => {
   return (
     <li className="my-1">
       <button
         type="button"
-        onClick={onClick}
-        className={`w-full flex items-center p-3 rounded-md transition-colors duration-200 ${
-          isActive ? 'bg-primary text-white' : 'text-gray-400 hover:bg-gray-700 hover:text-white'
+        onClick={isDisabled ? undefined : onClick}
+        disabled={isDisabled}
+        className={`flex w-full items-center p-3 rounded-md transition-colors duration-200 ${
+          isDisabled
+            ? 'text-gray-600 cursor-not-allowed opacity-50'
+            : isActive
+              ? 'bg-primary text-white cursor-pointer'
+              : 'text-gray-400 hover:bg-gray-700 hover:text-white cursor-pointer'
         }`}
         title={isCollapsed ? label : undefined}
       >
         <span className="flex-shrink-0">{icon}</span>
-        {!isCollapsed && <span className="ml-3 font-medium whitespace-nowrap">{label}</span>}
+        {!isCollapsed && (
+          <span className="ml-3 font-medium whitespace-nowrap">
+            {label}
+            {isDisabled && <span className="ml-2 text-xs">(Not Available)</span>}
+          </span>
+        )}
       </button>
     </li>
   );
@@ -66,6 +85,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   setActiveView,
   isCollapsed,
   setIsCollapsed,
+  isAIAvailable,
 }) => {
   return (
     <aside
@@ -115,6 +135,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             isActive={activeView === 'analysis'}
             onClick={() => setActiveView('analysis')}
             isCollapsed={isCollapsed}
+            isDisabled={!isAIAvailable}
           />
           <NavItem
             icon={<ChartBarIcon className="w-6 h-6" />}
